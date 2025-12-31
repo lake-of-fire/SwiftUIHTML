@@ -28,6 +28,7 @@ public enum HTMLMinifier {
 
         // 4. Remove all remaining line breaks and tabs (excluding inside tags)
         result = result.replacingOccurrences(of: ">([^<]*?)[\\n\\r\\t]+([^<]*?)<", with: ">$1 $2<", options: .regularExpression)
+        result = result.replacingOccurrences(of: "\t", with: " ")
 
         return result
     }

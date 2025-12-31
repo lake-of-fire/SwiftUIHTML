@@ -41,12 +41,12 @@ public enum CSSFontUtility {
             if let value = Double(trimmed.dropLast(2)) {
                 return CGFloat(value)
             }
-        } else if trimmed.hasSuffix("em") {
-            if let value = Double(trimmed.dropLast(2)) {
-                return baseSize * CGFloat(value)
-            }
         } else if trimmed.hasSuffix("rem") {
             if let value = Double(trimmed.dropLast(3)) {
+                return baseSize * CGFloat(value)
+            }
+        } else if trimmed.hasSuffix("em") {
+            if let value = Double(trimmed.dropLast(2)) {
                 return baseSize * CGFloat(value)
             }
         } else if trimmed.hasSuffix("%") {
