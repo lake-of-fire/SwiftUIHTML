@@ -52,7 +52,7 @@ struct READMECustomTagsSample: View {
                         .htmlEnvironment(\.configuration, .sample) // configuration with custom tags registered
                         .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                 }
                 
@@ -73,12 +73,12 @@ struct READMECustomTagsSample: View {
                     TextEditor(text: $htmlCode)
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                         .frame(minHeight: 140)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -96,7 +96,7 @@ let configuration = HTMLConfiguration.default
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -181,7 +181,7 @@ let configuration = HTMLConfiguration.default
             .padding()
         }
         .navigationTitle("README Custom Tags")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

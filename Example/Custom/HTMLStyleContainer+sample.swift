@@ -1,12 +1,18 @@
 //  Copyright © 2025 PRND. All rights reserved.
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
 import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 import SwiftUIHTML
 
 extension HTMLStyleContainer {
     static func sample(by lineBreakMode: LineBreakMode) -> HTMLStyleContainer {
         var style = HTMLStyleContainer()
-        let font = UIFont.systemFont(ofSize: 12)
+        let font = ExampleFont.systemFont(ofSize: 12)
         style.uiFont = font
         style.textLine = .lineHeight(font: font, lineHeight: 24)
         style.lineBreakMode = lineBreakMode

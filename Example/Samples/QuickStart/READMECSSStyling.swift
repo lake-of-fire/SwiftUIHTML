@@ -80,7 +80,7 @@ struct READMECSSStyling: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode.html))
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                 }
                 
@@ -101,12 +101,12 @@ struct READMECSSStyling: View {
                     TextEditor(text: $htmlCode)
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                         .frame(minHeight: 140)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -125,7 +125,7 @@ HTMLView(html: html, parser: parser)
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -222,7 +222,7 @@ HTMLView(html: html, parser: parser)
             .padding()
         }
         .navigationTitle("README CSS Styling")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

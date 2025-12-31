@@ -2,6 +2,13 @@
 
 import SwiftUI
 import SwiftUIHTML
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 struct ComplexHTMLSample: View {
     let html = """
@@ -95,17 +102,17 @@ struct ComplexHTMLSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, {
                         var container = HTMLStyleContainer()
-                        let font = UIFont.systemFont(ofSize: 14)
+                        let font = ExampleFont.systemFont(ofSize: 14)
                         container.uiFont = font
                         container.textLine = .lineHeight(font: font, lineHeight: 20)
                         container.lineBreakMode = .byWordWrapping
                         return container
                     }())
                     .padding()
-                    .background(Color(.systemBackground))
+                    .background(platformBackgroundColor)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(.systemGray5), lineWidth: 1)
+                            .stroke(Color.platformSystemGray5, lineWidth: 1)
                     )
                 
                 // 복잡성 설명
@@ -178,15 +185,23 @@ struct ComplexHTMLSample: View {
 """)
                     .font(.system(.caption, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
             }
             .padding()
         }
         .navigationTitle("Complex HTML")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
+}
+
+private var platformBackgroundColor: Color {
+#if os(macOS)
+    return Color(nsColor: .windowBackgroundColor)
+#else
+    return Color(.systemBackground)
+#endif
 }
 
 #Preview {

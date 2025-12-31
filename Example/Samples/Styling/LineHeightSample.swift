@@ -2,6 +2,13 @@
 
 import SwiftUI
 import SwiftUIHTML
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 struct LineHeightSample: View {
     let longText = """
@@ -43,7 +50,7 @@ struct LineHeightSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 16)
                             container.lineBreakMode = .byWordWrapping
@@ -72,7 +79,7 @@ struct LineHeightSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 20)
                             container.lineBreakMode = .byWordWrapping
@@ -101,7 +108,7 @@ struct LineHeightSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 28)
                             container.lineBreakMode = .byWordWrapping
@@ -130,7 +137,7 @@ struct LineHeightSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineSpacing(spacing: 8)
                             container.lineBreakMode = .byWordWrapping
@@ -149,17 +156,10 @@ struct LineHeightSample: View {
                     Text("TextLine Configuration Method")
                         .font(.headline)
                     
-                    Text("""
-// Line height setting (absolute value)
-let font = UIFont.systemFont(ofSize: 14)
-container.textLine = .lineHeight(font: font, lineHeight: 20)
-
-// Line spacing setting (relative value)
-container.textLine = .lineSpacing(spacing: 8)
-""")
+                    Text(lineHeightCodeSample)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -214,8 +214,27 @@ container.textLine = .lineSpacing(spacing: 8)
             .padding()
         }
         .navigationTitle("Line Height")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
+}
+
+private var fontTypeName: String {
+#if os(macOS)
+    return "NSFont"
+#else
+    return "UIFont"
+#endif
+}
+
+private var lineHeightCodeSample: String {
+    """
+// Line height setting (absolute value)
+let font = \(fontTypeName).systemFont(ofSize: 14)
+container.textLine = .lineHeight(font: font, lineHeight: 20)
+
+// Line spacing setting (relative value)
+container.textLine = .lineSpacing(spacing: 8)
+"""
 }
 
 #Preview {

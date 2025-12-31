@@ -64,7 +64,7 @@ struct CSSColorSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 
                 // Supported Color Formats
@@ -120,7 +120,7 @@ struct CSSColorSample: View {
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -142,7 +142,7 @@ struct CSSColorSample: View {
             .padding()
         }
         .navigationTitle("CSS Colors")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

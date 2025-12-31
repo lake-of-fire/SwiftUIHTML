@@ -2,6 +2,13 @@
 
 import SwiftUI
 import SwiftUIHTML
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 struct RichContentSample: View {
     let html = """
@@ -60,17 +67,17 @@ struct RichContentSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, {
                         var container = HTMLStyleContainer()
-                        let font = UIFont.systemFont(ofSize: 15)
+                        let font = ExampleFont.systemFont(ofSize: 15)
                         container.uiFont = font
                         container.textLine = .lineHeight(font: font, lineHeight: 22)
                         container.lineBreakMode = .byWordWrapping
                         return container
                     }())
                     .padding()
-                    .background(Color(.systemBackground))
+                    .background(platformBackgroundColor)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(.systemGray5), lineWidth: 1)
+                            .stroke(Color.platformSystemGray5, lineWidth: 1)
                     )
                 
                 // Features
@@ -111,15 +118,23 @@ struct RichContentSample: View {
 """)
                     .font(.system(.caption, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
             }
             .padding()
         }
         .navigationTitle("Rich Content")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
+}
+
+private var platformBackgroundColor: Color {
+#if os(macOS)
+    return Color(nsColor: .windowBackgroundColor)
+#else
+    return Color(.systemBackground)
+#endif
 }
 
 #Preview {

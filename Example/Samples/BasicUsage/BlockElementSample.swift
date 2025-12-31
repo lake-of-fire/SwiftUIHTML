@@ -56,7 +56,7 @@ struct BlockElementSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 
                 // Supported Block Tags
@@ -102,7 +102,7 @@ struct BlockElementSample: View {
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -123,7 +123,7 @@ struct BlockElementSample: View {
             .padding()
         }
         .navigationTitle("Block Elements")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

@@ -2,6 +2,13 @@
 
 import SwiftUI
 import SwiftUIHTML
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 struct LineBreakSample: View {
     @State private var htmlCode = """
@@ -59,7 +66,7 @@ struct LineBreakSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 20)
                             container.lineBreakMode = .byWordWrapping
@@ -83,7 +90,7 @@ struct LineBreakSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 20)
                             container.lineBreakMode = .byCharWrapping
@@ -115,12 +122,12 @@ struct LineBreakSample: View {
                     TextEditor(text: $htmlCode)
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                         .frame(minHeight: 150)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -201,7 +208,7 @@ struct LineBreakSample: View {
             .padding()
         }
         .navigationTitle("Line Break Modes")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

@@ -37,7 +37,7 @@ struct VideoTagSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 
                 // Video tag description
@@ -75,7 +75,7 @@ struct VideoTagView: BlockTag, Equatable {
 """)
                     .font(.system(.caption, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -90,7 +90,7 @@ let configuration = HTMLConfiguration.default
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -104,7 +104,7 @@ let configuration = HTMLConfiguration.default
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -142,7 +142,7 @@ let configuration = HTMLConfiguration.default
             .padding()
         }
         .navigationTitle("Video Tag")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

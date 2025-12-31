@@ -1,5 +1,10 @@
 //  Copyright © 2024 PRND. All rights reserved.
 import SwiftUI
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 
 extension HTMLStyleContainer {
@@ -10,9 +15,15 @@ extension HTMLStyleContainer {
 }
 
 public extension HTMLStyleContainer.TextLineAttribute {
-    static func lineHeight(font: UIFont, lineHeight: CGFloat) -> Self {
-        .lineHeight(fontLineHeight: font.lineHeight, lineHeight: lineHeight)
+#if os(macOS)
+    static func lineHeight(font: NSFont, lineHeight: CGFloat) -> Self {
+        .lineHeight(fontLineHeight: font.manabiLineHeight, lineHeight: lineHeight)
     }
+#else
+    static func lineHeight(font: UIFont, lineHeight: CGFloat) -> Self {
+        .lineHeight(fontLineHeight: font.manabiLineHeight, lineHeight: lineHeight)
+    }
+#endif
 }
 
 extension HTMLStyleContainer.TextLineAttribute {

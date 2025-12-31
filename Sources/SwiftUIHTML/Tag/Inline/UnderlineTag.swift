@@ -7,8 +7,7 @@ struct UnderlineTag: InlineTag {
         styleContainer.underlineStyle = .single
 
         if let underlineColor = attributes["underline-color"]?.toColor() {
-            styleContainer.underlineColor = UIColor(underlineColor)
+            styleContainer.underlineColor = PlatformColor(underlineColor)
         }
     }
 }
-

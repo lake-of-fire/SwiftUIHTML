@@ -49,7 +49,7 @@ struct READMEBasicUsageSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, createStyleContainer())
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                 }
                 
@@ -70,12 +70,12 @@ struct READMEBasicUsageSample: View {
                     TextEditor(text: $htmlCode)
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                         .frame(minHeight: 120)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -111,7 +111,7 @@ struct ContentView: View {
 """)
                     .font(.system(.caption, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -164,7 +164,7 @@ struct ContentView: View {
             .padding()
         }
         .navigationTitle("README Basic Usage")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

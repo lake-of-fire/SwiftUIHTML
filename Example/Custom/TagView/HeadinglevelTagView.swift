@@ -1,5 +1,12 @@
 //  Copyright © 2025 PRND. All rights reserved.
 import SwiftUI
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 import SwiftUIHTML
 
@@ -11,7 +18,7 @@ struct Headinglevel1TagView: BlockTag {
     }
 
     static func applyStyles(with attributes: [String : AttributeValue], to styleContainer: inout HTMLStyleContainer) {
-        styleContainer.uiFont = UIFont.boldSystemFont(ofSize: 24)
+        styleContainer.uiFont = ExampleFont.boldSystemFont(ofSize: 24)
     }
 }
 
@@ -23,7 +30,7 @@ struct Headinglevel2TagView: BlockTag {
         self.element = element
     }
     static func applyStyles(with attributes: [String : AttributeValue], to styleContainer: inout HTMLStyleContainer) {
-        styleContainer.uiFont = UIFont.boldSystemFont(ofSize: 20)
+        styleContainer.uiFont = ExampleFont.boldSystemFont(ofSize: 20)
     }
 }
 
@@ -36,6 +43,6 @@ struct Headinglevel3TagView: BlockTag {
     }
 
     static func applyStyles(with attributes: [String : AttributeValue], to styleContainer: inout HTMLStyleContainer) {
-        styleContainer.uiFont = UIFont.boldSystemFont(ofSize: 18)
+        styleContainer.uiFont = ExampleFont.boldSystemFont(ofSize: 18)
     }
 }

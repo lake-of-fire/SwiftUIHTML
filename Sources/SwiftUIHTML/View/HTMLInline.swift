@@ -58,16 +58,29 @@ struct HTMLInline: View {
                 case let .attachment(_, _, _, styleContainer):
                     return result + (
                         Text(
-                            Image(uiImage: attachmentManager.sizeImage(
-                                key: type,
-                                styleContainer: styleContainer
-                            ))
+                            attachmentImage(for: type, styleContainer: styleContainer)
                         ).font(.system(size: 1))
                     )
                 }
             }
     }
 
+}
+
+private extension HTMLInline {
+    func attachmentImage(for type: TextType, styleContainer: HTMLStyleContainer) -> Image {
+#if os(macOS)
+        return Image(nsImage: attachmentManager.sizeImage(
+            key: type,
+            styleContainer: styleContainer
+        ))
+#else
+        return Image(uiImage: attachmentManager.sizeImage(
+            key: type,
+            styleContainer: styleContainer
+        ))
+#endif
+    }
 }
 
 extension HTMLInline {

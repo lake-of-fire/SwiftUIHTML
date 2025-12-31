@@ -1,4 +1,5 @@
 //  Copyright © 2025 PRND. All rights reserved.
+#if os(iOS)
 import SwiftUI
 import Testing
 
@@ -455,6 +456,7 @@ class HTMLBasicTests {
         assertSnapshot(of: view, as: .image)
     }
 }
+#endif
 
 
 extension UIView {

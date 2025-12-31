@@ -31,7 +31,7 @@ struct HelloWorldSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 
                 // Code
@@ -52,7 +52,7 @@ HTMLView(html: html, parser: HTMLFuziParser())
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -73,7 +73,7 @@ HTMLView(html: html, parser: HTMLFuziParser())
             .padding()
         }
         .navigationTitle("Hello SwiftUIHTML")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

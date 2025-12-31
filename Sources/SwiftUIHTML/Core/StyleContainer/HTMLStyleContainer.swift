@@ -4,7 +4,7 @@ import SwiftUI
 
 public struct HTMLStyleContainer: Equatable, Sendable, Hashable {
     public func hash(into hasher: inout Hasher) {
-        if #available(iOS 16, *) {
+        if #available(iOS 16, macOS 13, *) {
             hasher.combine(container)
         } else {
             hasher.combine(HashableAttributeContainer(container))

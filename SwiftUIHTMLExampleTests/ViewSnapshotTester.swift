@@ -1,4 +1,5 @@
 //  Copyright © 2025 PRND. All rights reserved.
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -82,3 +83,4 @@ class ViewSnapshotTester {
         return hostingView
     }
 }
+#endif

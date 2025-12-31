@@ -1,9 +1,15 @@
 //  Copyright © 2025 PRND. All rights reserved.
 
 import SwiftUI
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
-@testable import SwiftUIHTML
-@testable import SwiftUIHTMLExample
+import SwiftUIHTML
 
 struct SnapshotTestSample: View {
     enum LineBreakModeOption: String, CaseIterable, Hashable {
@@ -107,7 +113,7 @@ struct SnapshotTestSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 14)
+                            let font = ExampleFont.systemFont(ofSize: 14)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 20)
                             container.lineBreakMode = selectedLineBreakModeOption.toLineBreakMode()
@@ -115,10 +121,10 @@ struct SnapshotTestSample: View {
                         }())
                         .frame(width: frameWidth)
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -139,12 +145,12 @@ struct SnapshotTestSample: View {
                     TextEditor(text: $htmlCode)
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                         .frame(minHeight: 200)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -226,7 +232,7 @@ struct SnapshotTestSample: View {
             .padding()
         }
         .navigationTitle("Snapshot Test")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

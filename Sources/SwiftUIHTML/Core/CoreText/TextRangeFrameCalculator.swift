@@ -1,7 +1,6 @@
 //  Copyright © 2025 PRND. All rights reserved.
 import Foundation
 import CoreText
-import UIKit
 
 /// Calculates frame rectangles for text ranges using Core Text
 final class TextRangeFrameCalculator {

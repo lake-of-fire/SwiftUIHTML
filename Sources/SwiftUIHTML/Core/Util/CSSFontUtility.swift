@@ -1,5 +1,5 @@
 //  Copyright © 2025 PRND. All rights reserved.
-import UIKit
+import Foundation
 
 /// CSS 폰트 스타일 파싱 및 처리를 담당하는 유틸리티 클래스
 
@@ -11,9 +11,9 @@ public enum CSSFontUtility {
     ///   - fontFamilyString: CSS font-family 문자열 (예: "Arial, Helvetica, sans-serif")
     ///   - size: 적용할 폰트 크기
     /// - Returns: 생성된 폰트
-    static func createFont(fromFontFamily fontFamilyString: String?, size: CGFloat) -> UIFont {
+    static func createFont(fromFontFamily fontFamilyString: String?, size: CGFloat) -> PlatformFont {
         guard let fontFamilyString = fontFamilyString, !fontFamilyString.isEmpty else {
-            return UIFont.systemFont(ofSize: size)
+            return PlatformFont.systemFont(ofSize: size)
         }
 
         let fontNames = parseFontFamilyString(fontFamilyString)
@@ -25,7 +25,7 @@ public enum CSSFontUtility {
     ///   - fontSizeString: CSS font-size 문자열 (예: "12px", "1.5em", "large")
     ///   - baseSize: 상대 크기 계산을 위한 기준 크기
     /// - Returns: 파싱된 폰트 크기
-    static func parseSize(fromFontSize fontSizeString: String?, baseSize: CGFloat = UIFont.systemFontSize) -> CGFloat {
+    static func parseSize(fromFontSize fontSizeString: String?, baseSize: CGFloat = PlatformFont.systemFontSize) -> CGFloat {
         guard let fontSizeString = fontSizeString, !fontSizeString.isEmpty else {
             return baseSize
         }
@@ -78,8 +78,8 @@ public enum CSSFontUtility {
     ///   - cssStyle: CSS 스타일 딕셔너리
     ///   - currentFont: 현재 설정된 폰트 (기준 크기 및 업데이트용)
     /// - Returns: 생성된 폰트
-    static func createFont(fromCSSStyle cssStyle: CSSStyle, currentFont: UIFont? = nil) -> UIFont? {
-        let currentSize = currentFont?.pointSize ?? UIFont.systemFontSize
+    static func createFont(fromCSSStyle cssStyle: CSSStyle, currentFont: PlatformFont? = nil) -> PlatformFont? {
+        let currentSize = currentFont?.pointSize ?? PlatformFont.systemFontSize
 
         // font-size와 font-family 속성 추출
         let fontSizeValue = cssStyle["font-size"]?.string
@@ -98,7 +98,7 @@ public enum CSSFontUtility {
                 } else if let family = fontFamilyValue {
                     return createFont(fromFontFamily: family, size: parsedSize)
                 } else {
-                    return currentFont?.withSize(parsedSize) ?? UIFont.systemFont(ofSize: parsedSize)
+                    return currentFont?.withSize(parsedSize) ?? PlatformFont.systemFont(ofSize: parsedSize)
                 }
             }
         }
@@ -110,7 +110,7 @@ public enum CSSFontUtility {
         if let fontFamily = fontFamilyValue {
             return createFont(fromFontFamily: fontFamily, size: size)
         } else if size != currentSize {
-            return currentFont?.withSize(size) ?? UIFont.systemFont(ofSize: size)
+            return currentFont?.withSize(size) ?? PlatformFont.systemFont(ofSize: size)
         }
 
         return currentFont
@@ -129,7 +129,7 @@ public enum CSSFontUtility {
             .filter { !$0.isEmpty }
     }
 
-    private static func createFontWithFallbacks(fontNames: [String], size: CGFloat) -> UIFont {
+    private static func createFontWithFallbacks(fontNames: [String], size: CGFloat) -> PlatformFont {
         // 특정 폰트 이름과 제네릭 패밀리 분리
         var specificFontNames: [String] = []
         var genericFamily: String? = nil
@@ -143,9 +143,9 @@ public enum CSSFontUtility {
         }
 
         // 첫 번째 유효한 폰트 찾기
-        var primaryFont: UIFont! = nil
+        var primaryFont: PlatformFont! = nil
         for name in specificFontNames {
-            if let font = UIFont(name: name, size: size) {
+            if let font = PlatformFont(name: name, size: size) {
                 primaryFont = font
                 break
             }
@@ -156,19 +156,19 @@ public enum CSSFontUtility {
             if let genericFamily = genericFamily {
                 return createSystemFontForGenericFamily(genericFamily, size: size)
             }
-            return UIFont.systemFont(ofSize: size)
+            return PlatformFont.systemFont(ofSize: size)
         }
 
         // 기본 폰트의 descriptor 가져오기
         let primaryDescriptor = primaryFont!.fontDescriptor
 
         // Cascade 목록 생성
-        var cascadeList: [UIFontDescriptor] = []
+        var cascadeList: [PlatformFontDescriptor] = []
 
         // Fallback 폰트 추가 (첫 번째 이후의 특정 폰트들)
         if specificFontNames.count > 1 {
             for name in specificFontNames.dropFirst() {
-                if let font = UIFont(name: name, size: size) {
+                if let font = PlatformFont(name: name, size: size) {
                     cascadeList.append(font.fontDescriptor)
                 }
             }
@@ -181,14 +181,18 @@ public enum CSSFontUtility {
         }
 
         // 최종 fallback으로 시스템 폰트 추가
-        cascadeList.append(UIFont.systemFont(ofSize: size).fontDescriptor)
+        cascadeList.append(PlatformFont.systemFont(ofSize: size).fontDescriptor)
 
         // cascade 목록이 비어있지 않으면 descriptor 업데이트
         if !cascadeList.isEmpty {
             let descriptorWithCascade = primaryDescriptor.addingAttributes([
-                UIFontDescriptor.AttributeName.cascadeList: cascadeList
+                PlatformFontDescriptor.AttributeName.cascadeList: cascadeList
             ])
-            return UIFont(descriptor: descriptorWithCascade, size: 0) // 0은 원래 크기 유지
+#if os(macOS)
+            return PlatformFont(descriptor: descriptorWithCascade, size: 0) ?? primaryFont // 0은 원래 크기 유지
+#else
+            return PlatformFont(descriptor: descriptorWithCascade, size: 0) // 0은 원래 크기 유지
+#endif
         }
 
         return primaryFont
@@ -199,26 +203,25 @@ public enum CSSFontUtility {
         return genericFamilies.contains(name.lowercased())
     }
 
-    private static func createSystemFontForGenericFamily(_ family: String, size: CGFloat) -> UIFont {
+    private static func createSystemFontForGenericFamily(_ family: String, size: CGFloat) -> PlatformFont {
         switch family.lowercased() {
         case "serif":
-            return UIFont(name: "TimesNewRomanPSMT", size: size) ?? UIFont.systemFont(ofSize: size)
+            return PlatformFont(name: "TimesNewRomanPSMT", size: size) ?? PlatformFont.systemFont(ofSize: size)
         case "sans-serif":
-            return UIFont.systemFont(ofSize: size)
+            return PlatformFont.systemFont(ofSize: size)
         case "monospace":
-            if #available(iOS 13.0, *) {
-                return UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
-            } else {
-                return UIFont(name: "Menlo-Regular", size: size) ?? UIFont.systemFont(ofSize: size)
+            if #available(iOS 13.0, macOS 10.15, *) {
+                return PlatformFont.monospacedSystemFont(ofSize: size, weight: .regular)
             }
+            return PlatformFont(name: "Menlo-Regular", size: size) ?? PlatformFont.systemFont(ofSize: size)
         case "cursive":
-            return UIFont(name: "SnellRoundhand", size: size) ?? UIFont.systemFont(ofSize: size)
+            return PlatformFont(name: "SnellRoundhand", size: size) ?? PlatformFont.systemFont(ofSize: size)
         case "fantasy":
-            return UIFont(name: "Papyrus", size: size) ?? UIFont.systemFont(ofSize: size)
+            return PlatformFont(name: "Papyrus", size: size) ?? PlatformFont.systemFont(ofSize: size)
         case "system-ui":
-            return UIFont.systemFont(ofSize: size)
+            return PlatformFont.systemFont(ofSize: size)
         default:
-            return UIFont.systemFont(ofSize: size)
+            return PlatformFont.systemFont(ofSize: size)
         }
     }
 

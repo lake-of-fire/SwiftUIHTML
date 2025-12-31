@@ -1,13 +1,14 @@
 // Copyright © 2025 PRND. All rights reserved.
-import UIKit
 import Combine
+import CoreGraphics
+import Foundation
 
 
 final class AttachmentManager: ObservableObject {
     lazy var layoutEngine = AttachmentLayoutEngine()
     private var cancellables = Set<AnyCancellable>()
 
-    private class ImageCache: NSCache<AttachmentImageCacheKey, UIImage> {}
+    private class ImageCache: NSCache<AttachmentImageCacheKey, PlatformImage> {}
     private let textImages = ImageCache()
 
     init() {
@@ -41,7 +42,7 @@ final class AttachmentManager: ObservableObject {
     }
 
     // SwiftUI Text(image:) 주입 이미지
-    func sizeImage(key: AnyHashable, styleContainer: HTMLStyleContainer) -> UIImage {
+    func sizeImage(key: AnyHashable, styleContainer: HTMLStyleContainer) -> PlatformImage {
         var size = layoutEngine.getSize(key: key)
         var fontName: String? = nil
         var fontSize: CGFloat? = nil
@@ -72,20 +73,10 @@ private extension AttachmentManager {
 }
 
 private struct EmptyImage {
-    let scale: CGFloat
     let size: CGSize
 
-    init(scale: CGFloat = 1, size: CGSize) {
-        self.scale = scale
-        self.size = size
-    }
-
-    var image: UIImage {
-        if size == .zero { return UIImage() }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { _ in }
+    var image: PlatformImage {
+        PlatformImage.manabiEmpty(size: size)
     }
 }
 

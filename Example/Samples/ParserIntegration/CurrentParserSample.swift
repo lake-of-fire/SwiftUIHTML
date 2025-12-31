@@ -48,7 +48,7 @@ struct CurrentParserSample: View {
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 
                 // Parser Information
@@ -82,7 +82,7 @@ struct HTMLFuziParser: HTMLParserable {
 """)
                     .font(.system(.caption, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -114,7 +114,7 @@ struct HTMLFuziParser: HTMLParserable {
             .padding()
         }
         .navigationTitle("Current Parser")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

@@ -86,7 +86,7 @@ struct HighlightTagSample: View {
                     .htmlEnvironment(\.configuration, highlightConfiguration)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 
                 // InlineTag Description
@@ -121,7 +121,7 @@ struct HighlightTag: InlineTag {
 """)
                     .font(.system(.caption, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -137,7 +137,7 @@ let configuration = HTMLConfiguration.default
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -160,7 +160,7 @@ let configuration = HTMLConfiguration.default
 """)
                     .font(.system(.body, design: .monospaced))
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color.platformSystemGray6)
                     .cornerRadius(8)
                 }
                 
@@ -200,7 +200,7 @@ let configuration = HTMLConfiguration.default
             .padding()
         }
         .navigationTitle("Highlight Tag")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

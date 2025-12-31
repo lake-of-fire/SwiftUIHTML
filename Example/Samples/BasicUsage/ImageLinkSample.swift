@@ -2,6 +2,13 @@
 
 import SwiftUI
 import SwiftUIHTML
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
+import UIKit
+private typealias ExampleFont = UIFont
+#endif
 
 struct ImageLinkSample: View {
     @State private var htmlCode = """
@@ -83,14 +90,14 @@ struct ImageLinkSample: View {
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
-                            let font = UIFont.systemFont(ofSize: 15)
+                            let font = ExampleFont.systemFont(ofSize: 15)
                             container.uiFont = font
                             container.textLine = .lineHeight(font: font, lineHeight: 22)
                             container.lineBreakMode = .byWordWrapping
                             return container
                         }())
                         .padding()
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                 }
                 
@@ -111,12 +118,12 @@ struct ImageLinkSample: View {
                     TextEditor(text: $htmlCode)
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Color(.systemGray6))
+                        .background(Color.platformSystemGray6)
                         .cornerRadius(8)
                         .frame(minHeight: 200)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color(.systemGray4), lineWidth: 1)
+                                .stroke(Color.platformSystemGray4, lineWidth: 1)
                         )
                 }
                 
@@ -174,7 +181,7 @@ struct ImageLinkSample: View {
             .padding()
         }
         .navigationTitle("Images & Links")
-        .navigationBarTitleDisplayMode(.inline)
+        .applyInlineNavigationTitleDisplayMode()
     }
 }
 

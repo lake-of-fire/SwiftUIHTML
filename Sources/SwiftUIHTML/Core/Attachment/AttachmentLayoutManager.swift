@@ -1,6 +1,11 @@
 //  Copyright © 2024 PRND. All rights reserved.
-import UIKit
 import Combine
+import Foundation
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 final class AttachmentLayoutEngine {
     
