@@ -143,7 +143,11 @@ struct StyleContainerExample: View {
     
     func smallStyleContainer() -> HTMLStyleContainer {
         var container = HTMLStyleContainer()
+#if os(macOS)
+        let font = NSFont.systemFont(ofSize: 12)
+#else
         let font = UIFont.systemFont(ofSize: 12)
+#endif
         container.uiFont = font
         container.textLine = .lineHeight(font: font, lineHeight: 16)
         container.lineBreakMode = .byWordWrapping
@@ -152,7 +156,11 @@ struct StyleContainerExample: View {
     
     func largeStyleContainer() -> HTMLStyleContainer {
         var container = HTMLStyleContainer()
+#if os(macOS)
+        let font = NSFont.systemFont(ofSize: 18)
+#else
         let font = UIFont.systemFont(ofSize: 18)
+#endif
         container.uiFont = font
         container.textLine = .lineHeight(font: font, lineHeight: 28)
         container.lineBreakMode = .byWordWrapping
@@ -188,7 +196,11 @@ struct LineSpacingExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
                     let font = UIFont.systemFont(ofSize: 14)
+#endif
                     container.uiFont = font
                     container.textLine = .lineHeight(font: font, lineHeight: 18)
                     return container
@@ -201,7 +213,11 @@ struct LineSpacingExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
                     let font = UIFont.systemFont(ofSize: 14)
+#endif
                     container.uiFont = font
                     container.textLine = .lineHeight(font: font, lineHeight: 24)
                     return container
@@ -214,7 +230,12 @@ struct LineSpacingExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
-                    container.uiFont = .systemFont(ofSize: 14)
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
+                    let font = UIFont.systemFont(ofSize: 14)
+#endif
+                    container.uiFont = font
                     container.textLine = .lineSpacing(spacing: 8)
                     return container
                 }())
@@ -255,7 +276,12 @@ struct LineBreakModeExample: View {
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
                     container.lineBreakMode = .byWordWrapping
-                    container.uiFont = .systemFont(ofSize: 14)
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
+                    let font = UIFont.systemFont(ofSize: 14)
+#endif
+                    container.uiFont = font
                     return container
                 }())
                 .frame(width: 250)
@@ -268,7 +294,12 @@ struct LineBreakModeExample: View {
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
                     container.lineBreakMode = .byCharWrapping
-                    container.uiFont = .systemFont(ofSize: 14)
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
+                    let font = UIFont.systemFont(ofSize: 14)
+#endif
+                    container.uiFont = font
                     return container
                 }())
                 .frame(width: 250)
@@ -471,7 +502,11 @@ struct ComplexStyleExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
                     let font = UIFont.systemFont(ofSize: 14)
+#endif
                     container.uiFont = font
                     container.textLine = .lineHeight(font: font, lineHeight: 20)
                     return container
@@ -535,3 +570,4 @@ struct StyleInheritanceExample: View {
 - HTMLStyleContainer is a global setting that affects all elements.
 - Inline styles have higher priority than HTMLStyleContainer settings.
 - Colors can use hex codes (#RRGGBB) or color names (red, blue, etc.).
+- For performance testing, use the Example app’s Testing section and the "Synthetic Stress" sample with higher section counts.

@@ -21,11 +21,13 @@ extension HTMLNode {
         configuration: HTMLConfiguration,
         with styleContainer: HTMLStyleContainer
     ) -> BlockElement {
-        let contents = children.flatMap { child -> [TagElement] in
-            child.toElement(
+        var contents: [TagElement] = []
+        contents.reserveCapacity(children.count)
+        for child in children {
+            contents.append(contentsOf: child.toElement(
                 configuration: configuration,
                 with: styleContainer
-            )
+            ))
         }
         return BlockElement(
             tag: tag,
@@ -73,15 +75,29 @@ fileprivate extension HTMLNode {
         var _styleContainer = styleContainer
         configuration.applyStyles(tag: tag, attributes: attributes, to: &_styleContainer)
 
+        if tag == "ruby",
+           let rubyData = rubyAttachmentData(from: children, styleContainer: _styleContainer) {
+            return [
+                .inline(InlineElement(
+                    tag: tag,
+                    attributes: rubyData,
+                    type: .attachment,
+                    styleContainer: _styleContainer
+                ))
+            ]
+        }
+
         switch configuration.tagType(of: tag) {
         case .inline:
-            return children
-                .flatMap { child -> [TagElement] in
-                    child.toElement(
-                        configuration: configuration,
-                        with: _styleContainer
-                    )
-                }
+            var contents: [TagElement] = []
+            contents.reserveCapacity(children.count)
+            for child in children {
+                contents.append(contentsOf: child.toElement(
+                    configuration: configuration,
+                    with: _styleContainer
+                ))
+            }
+            return contents
 
         case .attachment:
             return [
@@ -101,5 +117,84 @@ fileprivate extension HTMLNode {
                 ))
             ]
         }
+    }
+}
+
+private extension HTMLNode {
+    func rubyAttachmentData(from children: [HTMLChild], styleContainer: HTMLStyleContainer) -> [String: AttributeValue]? {
+        let rubyPieces = rubyComponents(from: children)
+        guard let baseText = rubyPieces.base, !baseText.isEmpty else { return nil }
+
+        var result = attributes
+        result["ruby-base"] = AttributeValue(rawValue: baseText)
+        if let rubyText = rubyPieces.ruby, !rubyText.isEmpty {
+            result["ruby-text"] = AttributeValue(rawValue: rubyText)
+        }
+
+        if let font = styleContainer.uiFont {
+            result["ruby-font-name"] = AttributeValue(rawValue: font.fontName)
+            result["ruby-font-size"] = AttributeValue(rawValue: "\(font.pointSize)")
+        }
+
+        return result
+    }
+
+    func rubyComponents(from children: [HTMLChild]) -> (base: String?, ruby: String?) {
+        var baseText = ""
+        var rubyText = ""
+        var hasBase = false
+        var hasRuby = false
+
+        for child in children {
+            switch child {
+            case let .text(text):
+                if !text.isEmpty {
+                    baseText.append(text)
+                    hasBase = true
+                }
+
+            case let .node(node):
+                switch node.tag {
+                case "rt":
+                    let trimmedText = node.plainText().trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmedText.isEmpty {
+                        if hasRuby {
+                            rubyText.append(" ")
+                        }
+                        rubyText.append(trimmedText)
+                        hasRuby = true
+                    }
+                case "rp", "rtc":
+                    continue
+                case "rb":
+                    let text = node.plainText()
+                    if !text.isEmpty {
+                        baseText.append(text)
+                        hasBase = true
+                    }
+                default:
+                    let text = node.plainText()
+                    if !text.isEmpty {
+                        baseText.append(text)
+                        hasBase = true
+                    }
+                }
+            }
+        }
+
+        return (base: hasBase ? baseText : nil, ruby: hasRuby ? rubyText : nil)
+    }
+
+    func plainText() -> String {
+        var result = ""
+        for child in children {
+            switch child {
+            case let .text(text):
+                result.append(text)
+            case let .node(node):
+                result.append(node.plainText())
+            }
+        }
+        return result
     }
 }

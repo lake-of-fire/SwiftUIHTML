@@ -7,12 +7,14 @@ import AppKit
 internal typealias PlatformFont = NSFont
 internal typealias PlatformColor = NSColor
 internal typealias PlatformImage = NSImage
+internal typealias PlatformView = NSView
 internal typealias PlatformFontDescriptor = NSFontDescriptor
 #else
 import UIKit
 internal typealias PlatformFont = UIFont
 internal typealias PlatformColor = UIColor
 internal typealias PlatformImage = UIImage
+internal typealias PlatformView = UIView
 internal typealias PlatformFontDescriptor = UIFontDescriptor
 #endif
 

@@ -12,6 +12,8 @@ final class AttachmentManager: ObservableObject {
     private let textImages = ImageCache()
 
     init() {
+        textImages.countLimit = 512
+        textImages.totalCostLimit = 8 * 1024 * 1024
         layoutEngine.layoutUpdatePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
@@ -43,7 +45,10 @@ final class AttachmentManager: ObservableObject {
 
     // SwiftUI Text(image:) 주입 이미지
     func sizeImage(key: AnyHashable, styleContainer: HTMLStyleContainer) -> PlatformImage {
-        var size = layoutEngine.getSize(key: key)
+        let size = layoutEngine.getSize(key: key)
+        if size == .zero {
+            return PlatformImage.manabiEmpty(size: .zero)
+        }
         var fontName: String? = nil
         var fontSize: CGFloat? = nil
         if let uiFont = styleContainer.uiFont {
@@ -60,7 +65,8 @@ final class AttachmentManager: ObservableObject {
             return image
         }
         let image = EmptyImage(size: size).image
-        textImages.setObject(image, forKey: cacheKey)
+        let cost = max(1, Int(size.width * size.height * 4))
+        textImages.setObject(image, forKey: cacheKey, cost: cost)
         return image
     }
 

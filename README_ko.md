@@ -21,6 +21,7 @@
 - **CSS 스타일 지원**: 인라인 스타일(padding, margin, background, border 등) 완벽 지원
 - **유연한 파서 통합**: Fuzi, SwiftSoup 등 외부 파서 라이브러리와 연동
 - **환경 값 시스템**: 전역 설정 관리 및 스타일 커스터마이징
+- **프로파일링 훅**: `SWIFTUIHTML_SIGNPOSTS=1` 설정 시 HTML 파싱 구간 signpost 출력
 
 ---
 
@@ -32,9 +33,11 @@
 |---------|-----|
 | **블록** | `div`, `body`, `p`, `header`, `main`, `section`, `footer`, `h1`, `h2` |
 | **인라인** | `span`, `a`, `b`, `strong`, `i`, `em`, `u` |
-| **첨부** | `img` |
+| **첨부** | `img`, `ruby` |
 
 > 참고: h3, ul, video 등의 태그는 커스텀 태그로 등록하여 사용할 수 있습니다.
+
+> 참고: `ruby`는 `<ruby><rt>` 형태의 주석을 CoreText로 렌더링합니다. `rt` 텍스트가 루비 문자열로 사용되며 `rp`/`rtc`는 무시됩니다.
 
 ### CSS 스타일 속성
 - **텍스트 스타일**: `color`, `background-color`, `font-family`, `font-size`, `line-height`, `word-break`
@@ -42,6 +45,7 @@
 - **인라인 스타일**: `color`, `background-color`, `border-radius` (strong, em, span 등 inline 요소)
 
 > **참고**: inline 요소(span, strong, em 등)에서는 `padding`, `margin`이 지원되지 않습니다.
+> **루비 옵션**: `ruby-position` (`before`, `after`, `interCharacter`, `inline`), `ruby-scale` (예: `0.58`), `ruby-font-name`, `ruby-font-size`, `ruby-annotation-font-name`, `ruby-annotation-font-size`.
 
 ---
 
@@ -83,11 +87,44 @@ struct ContentView: View {
     
     func createStyleContainer() -> HTMLStyleContainer {
         var container = HTMLStyleContainer()
-        container.uiFont = .systemFont(ofSize: 16)
+#if os(macOS)
+        let font = NSFont.systemFont(ofSize: 16)
+#else
+        let font = UIFont.systemFont(ofSize: 16)
+#endif
+        container.uiFont = font
         container.lineBreakMode = .byWordWrapping
         return container
     }
 }
+```
+
+### Profiling
+
+환경 변수 `SWIFTUIHTML_SIGNPOSTS=1`을 설정하면 HTML 파싱 구간에 signpost가 출력됩니다. Instruments에서 “HTML parse” 구간을 확인하세요.
+성능 비교용으로 `SWIFTUIHTML_CACHE_FRAMESETTER=1`을 켜거나 `SWIFTUIHTML_DISABLE_RANGE_SCAN_OPT=1`로 레거시 범위 스캔 경로를 강제로 사용할 수 있습니다.
+
+### Performance Tests
+
+SwiftUIHTML 패키지에는 synthetic HTML 파싱의 median 시간을 출력하는 가벼운 성능 스모크 테스트가 포함되어 있습니다(SwiftSoup 사용 시 추가 측정). SwiftUIHTML 패키지에서 `swift test`를 실행하면 결과가 출력됩니다.
+
+### 루비 예제
+
+```swift
+let html = """
+    <p>
+        <ruby ruby-position="after" ruby-scale="0.5">
+            今日<rt>きょう</rt>
+        </ruby>
+        는 맑습니다.
+    </p>
+    <p>
+        <ruby ruby-font-size="22" ruby-annotation-font-size="12">
+            明日<rt>あした</rt>
+        </ruby>
+        도 맑습니다.
+    </p>
+    """
 ```
 
 ### 파서 구현
@@ -165,6 +202,8 @@ HTML 콘텐츠를 렌더링하는 메인 뷰
 ## 📱 예제 프로젝트
 
 더 많은 예제는 `Example` 폴더의 프로젝트를 참고하세요.
+Testing 섹션에 대용량 HTML을 위한 "Synthetic Stress" 샘플이 있습니다.
+SwiftSoup를 연결한 경우 Parser Integration 섹션에 SwiftSoup 파서 샘플이 표시됩니다.
 
 ---
 

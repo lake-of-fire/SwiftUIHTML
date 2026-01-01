@@ -16,7 +16,7 @@ public struct DefaultAttributeStyler: AttributeStyleable {
         attributes: [String : AttributeValue],
         to styleContainer: inout HTMLStyleContainer
     ) {
-        let cssStyle = attributes["style"]?.cssStyle ?? .empty
+        guard let cssStyle = attributes["style"]?.cssStyle else { return }
 
         if let color = cssStyle["color"]?.toColor() {
             styleContainer.foregroundColor = color

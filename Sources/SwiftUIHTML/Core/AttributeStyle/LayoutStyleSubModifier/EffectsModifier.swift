@@ -31,9 +31,9 @@ private struct ShadowModifier: ViewModifier {
     
     private func parseShadow(_ boxShadow: String) -> (color: Color, radius: CGFloat, x: CGFloat, y: CGFloat) {
         var color: Color = .black.opacity(0.33)
-        var radius: CGFloat = 3
-        var x: CGFloat = 0
-        var y: CGFloat = 2
+        let radius: CGFloat = 3
+        let x: CGFloat = 0
+        let y: CGFloat = 2
         
         if boxShadow.lowercased() == "none" || boxShadow.lowercased() == "initial" {
             return (Color.clear, 0, 0, 0)

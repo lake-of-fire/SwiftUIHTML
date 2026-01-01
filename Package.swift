@@ -13,6 +13,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-testing.git", from: "6.2.3"),
+        .package(url: "https://github.com/scinfu/SwiftSoup.git", branch: "master"),
     ],
     targets: [
         .target(
@@ -22,6 +23,7 @@ let package = Package(
             dependencies: [
                 "SwiftUIHTML",
                 .product(name: "Testing", package: "swift-testing"),
+                .product(name: "SwiftSoup", package: "SwiftSoup"),
             ]),
     ]
 )

@@ -34,19 +34,22 @@ extension Collection where Element == InlineElement {
     
     @MainActor
     func toHTMLTextType() -> [TextType] {
+        var results: [TextType] = []
+        results.reserveCapacity(count)
         var textCount = 0
         var attachmentCount = 0
 
-        return map { element in
+        for element in self {
             switch element.type {
             case .text:
                 defer { textCount += 1 }
-                return element.toHTMLTextType(id: textCount)
+                results.append(element.toHTMLTextType(id: textCount))
             case .attachment:
                 defer { attachmentCount += 1 }
-                return element.toHTMLTextType(id: attachmentCount)
+                results.append(element.toHTMLTextType(id: attachmentCount))
             }
         }
+        return results
     }
 }
 

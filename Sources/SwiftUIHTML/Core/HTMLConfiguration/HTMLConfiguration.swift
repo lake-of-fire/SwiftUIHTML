@@ -2,7 +2,7 @@
 import SwiftUI
 
 
-public struct HTMLConfiguration: Sendable {
+public struct HTMLConfiguration: @unchecked Sendable {
     enum TagType {
         case block
         case inline
@@ -39,6 +39,7 @@ public struct HTMLConfiguration: Sendable {
             tag: "u",
             renderer: UnderlineTag.self
         )
+        .register(tag: "ruby", renderer: RubyTag.self)
         .register(tag: "img", renderer: ImageTag.self)
     }
 }

@@ -61,7 +61,56 @@ struct TextStyleExample: View {
 }
 ```
 
-## 3. 이미지 삽입 / Image Embedding
+## 3. 루비 주석 / Ruby Annotations
+
+### 한글 설명
+`ruby`와 `rt` 태그를 사용해 일본어 루비 주석을 렌더링할 수 있습니다. `rt` 텍스트는 루비 문자열로 사용되고 `rp`/`rtc`는 무시됩니다. 필요하면 `ruby-position`, `ruby-scale`, `ruby-font-name`, `ruby-font-size`, `ruby-annotation-font-*` 속성으로 조정할 수 있습니다.
+
+### English
+You can render ruby annotations using `ruby` and `rt`. The `rt` text becomes the ruby string, and `rp`/`rtc` are ignored. Optional attributes include `ruby-position`, `ruby-scale`, `ruby-font-name`, `ruby-font-size`, and `ruby-annotation-font-*`.
+
+```swift
+struct RubyExample: View {
+    let html = """
+        <p>루비 주석 예제:</p>
+        <p>
+            <ruby>
+                漢字<rt>かんじ</rt>
+            </ruby>
+            를 읽습니다.
+        </p>
+        <p>
+            <ruby ruby-position="after" ruby-scale="0.5">
+                今日<rt>きょう</rt>
+            </ruby>
+            는 맑습니다.
+        </p>
+        <p>
+            <ruby ruby-font-size="22" ruby-annotation-font-size="12">
+                明日<rt>あした</rt>
+            </ruby>
+            도 맑습니다.
+        </p>
+        """
+    
+    var body: some View {
+        HTMLView(html: html, parser: HTMLFuziParser())
+            .htmlEnvironment(\.configuration, .default)
+            .htmlEnvironment(\.styleContainer, {
+                var container = HTMLStyleContainer()
+#if os(macOS)
+                let font = NSFont.systemFont(ofSize: 18)
+#else
+                let font = UIFont.systemFont(ofSize: 18)
+#endif
+                container.uiFont = font
+                return container
+            }())
+    }
+}
+```
+
+## 4. 이미지 삽입 / Image Embedding
 
 ### 한글 설명
 HTML 내에 이미지를 삽입하는 방법입니다. 웹 URL이나 로컬 이미지를 모두 지원합니다.
@@ -92,7 +141,7 @@ struct ImageExample: View {
 }
 ```
 
-## 4. 링크 처리 / Link Handling
+## 5. 링크 처리 / Link Handling
 
 ### 한글 설명
 클릭 가능한 링크를 생성하는 방법입니다. 링크 태그는 자동으로 처리됩니다.
@@ -119,7 +168,7 @@ struct LinkExample: View {
 }
 ```
 
-## 5. 블록 요소 구조 / Block Element Structure
+## 6. 블록 요소 구조 / Block Element Structure
 
 ### 한글 설명
 다양한 블록 요소들을 사용하는 방법입니다. div, p, section 등의 기본 블록 태그를 활용합니다.
@@ -153,7 +202,7 @@ struct BlockElementExample: View {
 }
 ```
 
-## 6. 헤더와 섹션 구조 / Headers and Section Structure
+## 7. 헤더와 섹션 구조 / Headers and Section Structure
 
 ### 한글 설명
 HTML 문서 구조를 만드는 방법입니다. header, main, section, footer 태그를 활용합니다.
@@ -197,7 +246,7 @@ struct DocumentStructureExample: View {
 }
 ```
 
-## 7. 줄바꿈 처리 / Line Break Handling
+## 8. 줄바꿈 처리 / Line Break Handling
 
 ### 한글 설명
 텍스트 줄바꿈을 처리하는 방법입니다. br 태그와 줄바꿈 모드를 설정할 수 있습니다.
@@ -249,13 +298,13 @@ struct LineBreakExample: View {
 }
 ```
 
-## 8. 폰트 설정 / Font Configuration
+## 9. 폰트 설정 / Font Configuration
 
 ### 한글 설명
-폰트 크기와 스타일을 설정하는 방법입니다. UIFont를 사용하여 시스템 폰트나 커스텀 폰트를 적용할 수 있습니다.
+폰트 크기와 스타일을 설정하는 방법입니다. iOS는 UIFont, macOS는 NSFont를 사용하여 시스템 폰트나 커스텀 폰트를 적용할 수 있습니다.
 
 ### English
-How to configure font size and style. You can apply system fonts or custom fonts using UIFont.
+How to configure font size and style. Use UIFont on iOS and NSFont on macOS to apply system or custom fonts.
 
 ```swift
 struct FontExample: View {
@@ -274,7 +323,12 @@ struct FontExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
-                    container.uiFont = .systemFont(ofSize: 14)
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
+                    let font = UIFont.systemFont(ofSize: 14)
+#endif
+                    container.uiFont = font
                     return container
                 }())
             
@@ -285,7 +339,12 @@ struct FontExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
-                    container.uiFont = .systemFont(ofSize: 18)
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 18)
+#else
+                    let font = UIFont.systemFont(ofSize: 18)
+#endif
+                    container.uiFont = font
                     return container
                 }())
         }
@@ -294,7 +353,7 @@ struct FontExample: View {
 }
 ```
 
-## 9. 줄 높이 설정 / Line Height Configuration
+## 10. 줄 높이 설정 / Line Height Configuration
 
 ### 한글 설명
 텍스트 줄 높이를 조정하는 방법입니다. 가독성을 높이기 위해 줄 간격을 설정할 수 있습니다.
@@ -319,7 +378,11 @@ struct LineHeightExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
                     let font = UIFont.systemFont(ofSize: 14)
+#endif
                     container.uiFont = font
                     container.textLine = .lineHeight(font: font, lineHeight: 18)
                     return container
@@ -331,7 +394,11 @@ struct LineHeightExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 14)
+#else
                     let font = UIFont.systemFont(ofSize: 14)
+#endif
                     container.uiFont = font
                     container.textLine = .lineHeight(font: font, lineHeight: 28)
                     return container
@@ -343,7 +410,7 @@ struct LineHeightExample: View {
 }
 ```
 
-## 10. 복합 예제 / Complex Example
+## 11. 복합 예제 / Complex Example
 
 ### 한글 설명
 여러 기능을 함께 사용하는 복합 예제입니다.
@@ -398,7 +465,11 @@ struct ComplexExample: View {
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
+#if os(macOS)
+                    let font = NSFont.systemFont(ofSize: 16)
+#else
                     let font = UIFont.systemFont(ofSize: 16)
+#endif
                     container.uiFont = font
                     container.textLine = .lineHeight(font: font, lineHeight: 24)
                     container.lineBreakMode = .byWordWrapping

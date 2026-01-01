@@ -3,6 +3,11 @@ import Foundation
 
 /// Class that provides HTML document compression functionality
 public enum HTMLMinifier {
+    private static let whitespaceBetweenTagsRegex: NSRegularExpression? = try? NSRegularExpression(
+        pattern: ">([\\s]+)<",
+        options: []
+    )
+
     /// Removes unnecessary whitespace from HTML documents and optimizes them.
     /// - Parameter html: Original HTML string
     /// - Returns: Optimized HTML string
@@ -15,15 +20,19 @@ public enum HTMLMinifier {
         result = result.replacingOccurrences(of: ">\\s*[\\n\\r]\\s*<", with: "><", options: .regularExpression)
 
         // 3. Convert only pure whitespace between tags to &nbsp; (when no line breaks)
-        let pattern = ">([\\s]+)<"
-
-        while let range = result.range(of: pattern, options: .regularExpression) {
-            let spacesRange = result.index(after: range.lowerBound)..<result.index(before: range.upperBound)
-            let spaces = result[spacesRange]
-
-            // Replace with &nbsp; only when whitespace has no line breaks
-            let nbspString = String(repeating: "&nbsp;", count: spaces.count)
-            result.replaceSubrange(range, with: ">" + nbspString + "<")
+        if let regex = whitespaceBetweenTagsRegex {
+            let fullRange = NSRange(result.startIndex..<result.endIndex, in: result)
+            let matches = regex.matches(in: result, range: fullRange)
+            for match in matches.reversed() {
+                guard match.numberOfRanges > 1,
+                      let matchRange = Range(match.range(at: 0), in: result),
+                      let spacesRange = Range(match.range(at: 1), in: result) else {
+                    continue
+                }
+                let spacesCount = result[spacesRange].count
+                let nbspString = String(repeating: "&nbsp;", count: spacesCount)
+                result.replaceSubrange(matchRange, with: ">" + nbspString + "<")
+            }
         }
 
         // 4. Remove all remaining line breaks and tabs (excluding inside tags)

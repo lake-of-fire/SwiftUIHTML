@@ -6,8 +6,13 @@ import SwiftUIHTML
 import AppKit
 private typealias ExampleFont = NSFont
 #else
+#if os(macOS)
+import AppKit
+private typealias ExampleFont = NSFont
+#else
 import UIKit
 private typealias ExampleFont = UIFont
+#endif
 #endif
 
 struct LineHeightSample: View {

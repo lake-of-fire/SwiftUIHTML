@@ -3,6 +3,9 @@
 SwiftUIHTML에서 커스텀 태그를 만들고 등록하는 방법을 소개합니다.
 This guide introduces how to create and register custom tags in SwiftUIHTML.
 
+> 참고: `ruby`는 기본 InlineAttachmentTag로 제공되며 별도 등록이 필요 없습니다.
+> Note: `ruby` is built-in as an InlineAttachmentTag and does not need custom registration.
+
 ## 태그 타입 / Tag Types
 
 ### 한글 설명
@@ -16,6 +19,17 @@ SwiftUIHTML supports three types of tags:
 - **BlockTag**: Block-level elements (div, section, header, etc.)
 - **InlineTag**: Inline text elements (span, strong, em, etc.)
 - **InlineAttachmentTag**: Inline attachment elements (img, video, etc.)
+
+### Built-in ruby example / 기본 ruby 예제
+
+```swift
+let html = """
+    <p>
+        <ruby>漢字<rt>かんじ</rt></ruby>
+        를 읽습니다.
+    </p>
+    """
+```
 
 ## 1. 커스텀 블록 태그 / Custom Block Tag
 

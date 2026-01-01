@@ -9,6 +9,9 @@ final class TextRangeFrameCalculator {
 
     /// Additional spacing between lines
     var lineSpacing: CGFloat = 0
+    private var cachedFramesetter: CTFramesetter?
+    private var cachedStringID: ObjectIdentifier?
+    private let framesetterLock = NSLock()
 
     // MARK: - Public Methods
 
@@ -115,7 +118,7 @@ private extension TextRangeFrameCalculator {
     ///   - containerSize: Size of the container
     /// - Returns: A Core Text frame
     func createTextFrame(for attrString: NSAttributedString, containerSize: CGSize) -> CTFrame {
-        let framesetter = CTFramesetterCreateWithAttributedString(attrString)
+        let framesetter = framesetter(for: attrString)
 
         // Calculate optimal text size with constraints
         let suggestedSize = CTFramesetterSuggestFrameSizeWithConstraints(
@@ -128,8 +131,6 @@ private extension TextRangeFrameCalculator {
 
         // Ensure minimum dimensions
         let width = max(suggestedSize.width, containerSize.width)
-        let height = max(suggestedSize.height, containerSize.height)
-
         let rect = CGRect(origin: .zero, size: CGSize(width: width, height: suggestedSize.height))
         let path = CGPath(rect: rect, transform: nil)
 
@@ -200,10 +201,27 @@ private extension TextRangeFrameCalculator {
     ///   - targetRanges: Text ranges to measure
     /// - Returns: Array of rectangles for each range
     func calculateRangeRects(in frame: CTFrame, containerSize: CGSize, targetRanges: [NSRange]) -> [CGRect] {
+        if ProcessInfo.processInfo.environment["SWIFTUIHTML_DISABLE_RANGE_SCAN_OPT"] == "1" {
+            return calculateRangeRectsLegacy(
+                in: frame,
+                containerSize: containerSize,
+                targetRanges: targetRanges
+            )
+        }
+
+        return calculateRangeRectsOptimized(
+            in: frame,
+            containerSize: containerSize,
+            targetRanges: targetRanges
+        )
+    }
+
+    func calculateRangeRectsLegacy(in frame: CTFrame, containerSize: CGSize, targetRanges: [NSRange]) -> [CGRect] {
         let lines = CTFrameGetLines(frame) as! [CTLine]
         let adjustedOrigins = adjustLineOrigins(frame: frame, lines: lines, containerSize: containerSize)
 
         var rangeRects: [CGRect] = []
+        rangeRects.reserveCapacity(targetRanges.count)
 
         // Process each line
         for (lineIndex, line) in lines.enumerated() {
@@ -218,14 +236,84 @@ private extension TextRangeFrameCalculator {
             guard !intersectingRanges.isEmpty else { continue }
 
             let lineOrigin = adjustedOrigins[lineIndex]
-            let characterRects = calculateCharacterBounds(in: line, ranges: intersectingRanges)
-
-            // Get line metrics
-            var ascent: CGFloat = 0
-            var descent: CGFloat = 0
-            _ = CTLineGetTypographicBounds(line, &ascent, &descent, nil)
+            let characterRects = calculateCharacterBounds(
+                in: line,
+                lineRange: lineNSRange,
+                ranges: intersectingRanges
+            )
 
             // Create rect for each character range
+            for charFrame in characterRects {
+                let lineRect = CGRect(
+                    x: charFrame.origin.x,
+                    y: lineOrigin.y,
+                    width: charFrame.size.width,
+                    height: charFrame.size.height
+                )
+                rangeRects.append(lineRect)
+            }
+        }
+
+        return rangeRects
+    }
+
+    func calculateRangeRectsOptimized(in frame: CTFrame, containerSize: CGSize, targetRanges: [NSRange]) -> [CGRect] {
+        let lines = CTFrameGetLines(frame) as! [CTLine]
+        guard !lines.isEmpty else { return [] }
+
+        let adjustedOrigins = adjustLineOrigins(frame: frame, lines: lines, containerSize: containerSize)
+
+        var rangesAreSorted = true
+        if targetRanges.count > 1 {
+            for index in 1..<targetRanges.count where targetRanges[index].location < targetRanges[index - 1].location {
+                rangesAreSorted = false
+                break
+            }
+        }
+        let ranges = rangesAreSorted ? targetRanges : targetRanges.sorted { $0.location < $1.location }
+
+        var rangeRects: [CGRect] = []
+        rangeRects.reserveCapacity(targetRanges.count)
+
+        var rangeIndex = 0
+
+        for (lineIndex, line) in lines.enumerated() {
+            let lineRange = CTLineGetStringRange(line)
+            let lineNSRange = NSRange(location: lineRange.location, length: lineRange.length)
+            let lineStart = lineNSRange.location
+            let lineEnd = lineNSRange.location + lineNSRange.length
+
+            while rangeIndex < ranges.count,
+                  ranges[rangeIndex].location + ranges[rangeIndex].length <= lineStart {
+                rangeIndex += 1
+            }
+
+            if rangeIndex >= ranges.count {
+                break
+            }
+
+            var intersectingRanges: [NSRange] = []
+            var scanIndex = rangeIndex
+            while scanIndex < ranges.count {
+                let range = ranges[scanIndex]
+                if range.location >= lineEnd {
+                    break
+                }
+                if NSIntersectionRange(lineNSRange, range).length > 0 {
+                    intersectingRanges.append(range)
+                }
+                scanIndex += 1
+            }
+
+            guard !intersectingRanges.isEmpty else { continue }
+
+            let lineOrigin = adjustedOrigins[lineIndex]
+            let characterRects = calculateCharacterBounds(
+                in: line,
+                lineRange: lineNSRange,
+                ranges: intersectingRanges
+            )
+
             for charFrame in characterRects {
                 let lineRect = CGRect(
                     x: charFrame.origin.x,
@@ -245,11 +333,9 @@ private extension TextRangeFrameCalculator {
     ///   - line: The Core Text line
     ///   - ranges: Text ranges to measure
     /// - Returns: Array of rectangles for the ranges in this line
-    func calculateCharacterBounds(in line: CTLine, ranges: [NSRange]) -> [CGRect] {
+    func calculateCharacterBounds(in line: CTLine, lineRange: NSRange, ranges: [NSRange]) -> [CGRect] {
         var characterBounds: [CGRect] = []
-
-        let lineRange = CTLineGetStringRange(line)
-        let lineNSRange = NSRange(location: lineRange.location, length: lineRange.length)
+        characterBounds.reserveCapacity(ranges.count)
 
         // Calculate metrics for the line
         var ascent: CGFloat = 0
@@ -259,7 +345,7 @@ private extension TextRangeFrameCalculator {
         // Process each range
         for range in ranges {
             // Check if the range intersects with this line
-            let intersection = NSIntersectionRange(lineNSRange, range)
+            let intersection = NSIntersectionRange(lineRange, range)
             guard intersection.length > 0 else { continue }
 
             // Calculate offsets for the intersection range
@@ -279,6 +365,27 @@ private extension TextRangeFrameCalculator {
         }
 
         return characterBounds
+    }
+}
+
+private extension TextRangeFrameCalculator {
+    func framesetter(for attributedString: NSAttributedString) -> CTFramesetter {
+        guard ProcessInfo.processInfo.environment["SWIFTUIHTML_CACHE_FRAMESETTER"] == "1" else {
+            return CTFramesetterCreateWithAttributedString(attributedString)
+        }
+
+        let objectID = ObjectIdentifier(attributedString as AnyObject)
+        framesetterLock.lock()
+        defer { framesetterLock.unlock() }
+
+        if cachedStringID == objectID, let cachedFramesetter {
+            return cachedFramesetter
+        }
+
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedString)
+        cachedStringID = objectID
+        cachedFramesetter = framesetter
+        return framesetter
     }
 }
 

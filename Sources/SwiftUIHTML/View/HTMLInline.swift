@@ -9,6 +9,8 @@ struct HTMLInline: View {
     }
 
     let texts: [TextType]
+    let hasAttachment: Bool
+    let textLine: TextLine
     @StateObject var attachmentManager = AttachmentManager()
 
     init(elements: [InlineElement]) {
@@ -16,7 +18,10 @@ struct HTMLInline: View {
     }
 
     init(texts: [TextType]) {
-        self.texts = texts.trimmingNewLines()
+        let trimmed = texts.trimmingNewLines().coalescingTextRuns()
+        self.texts = trimmed
+        self.hasAttachment = trimmed.contains(where: \.hasAttachment)
+        self.textLine = Self.resolveTextLine(texts: trimmed)
     }
 
     var body: some View {
@@ -36,10 +41,6 @@ struct HTMLInline: View {
         }
     }
 
-    var hasAttachment: Bool {
-        !texts.lazy.filter(\.hasAttachment).isEmpty
-    }
-  
     var content: some View {
         texts
             .reduce(Text("")) { result, type in
@@ -68,6 +69,25 @@ struct HTMLInline: View {
 }
 
 private extension HTMLInline {
+    static func resolveTextLine(texts: [TextType]) -> TextLine {
+        var maxLineSpacing: CGFloat = 0
+        var maxVerticalPadding: CGFloat = 0
+
+        for text in texts {
+            guard case .text(_, let attributes) = text,
+                  let textLine = attributes.textLine else { continue }
+            maxLineSpacing = max(maxLineSpacing, textLine.lineSpacing)
+            if let verticalPadding = textLine.verticalPadding {
+                maxVerticalPadding = max(maxVerticalPadding, verticalPadding)
+            }
+        }
+
+        return TextLine(
+            lineSpacing: maxLineSpacing,
+            verticalPadding: maxVerticalPadding
+        )
+    }
+
     func attachmentImage(for type: TextType, styleContainer: HTMLStyleContainer) -> Image {
 #if os(macOS)
         return Image(nsImage: attachmentManager.sizeImage(
@@ -84,17 +104,6 @@ private extension HTMLInline {
 }
 
 extension HTMLInline {
-    var textLine: TextLine {
-        let result: [HTMLStyleContainer.TextLineAttribute] = texts.compactMap {
-            guard case .text(_, let attributes) = $0, let textLine = attributes.textLine else { return nil }
-            return textLine
-        }
-
-        return TextLine(
-            lineSpacing: result.compactMap(\.lineSpacing).max() ?? 0,
-            verticalPadding: result.compactMap(\.verticalPadding).max() ?? 0
-        )
-    }
 }
 
 extension HTMLInline: @preconcurrency Equatable {
@@ -113,5 +122,25 @@ private extension Array where Element == TextType {
             return dropLast()
         }
         return self
+    }
+
+    func coalescingTextRuns() -> [Element] {
+        var result: [Element] = []
+        result.reserveCapacity(count)
+
+        for element in self {
+            switch element {
+            case let .text(string, styleContainer):
+                guard !string.isEmpty else { continue }
+                if let last = result.last, case let .text(existing, existingStyle) = last, existingStyle == styleContainer {
+                    result[result.count - 1] = .text(existing + string, styleContainer: existingStyle)
+                } else {
+                    result.append(.text(string, styleContainer: styleContainer))
+                }
+            default:
+                result.append(element)
+            }
+        }
+        return result
     }
 }

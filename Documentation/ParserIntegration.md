@@ -3,6 +3,25 @@
 SwiftUIHTML은 HTMLParserable 프로토콜을 통해 다양한 HTML 파서와 통합할 수 있습니다.
 SwiftUIHTML can integrate with various HTML parsers through the HTMLParserable protocol.
 
+> Note: For ruby annotations, parsers should keep `<ruby>` as a node with child `<rt>` nodes; the renderer extracts base/ruby text from those children.
+
+### Ruby parsing example / Ruby 파싱 예제
+
+```swift
+// Input:
+// <ruby>漢字<rt>かんじ</rt></ruby>
+//
+// Expected node shape:
+let rubyNode = HTMLNode(
+    tag: "ruby",
+    attributes: [:],
+    children: [
+        .text("漢字"),
+        .node(HTMLNode(tag: "rt", attributes: [:], children: [.text("かんじ")]))
+    ]
+)
+```
+
 ## HTMLParserable 프로토콜 / HTMLParserable Protocol
 
 ### 한글 설명
@@ -28,8 +47,6 @@ struct HTMLNode {
 
 enum HTMLChild {
     case text(String)
-    case trimmingText(String)
-    case newLine
     case node(HTMLNode)
 }
 ```
@@ -89,11 +106,11 @@ struct HTMLFuziParser: HTMLParserable {
             .compactMap { node -> HTMLChild? in
                 if node.type == .Text {
                     let text = node.stringValue
-                    return text.isEmpty ? nil : .trimmingText(text)
+                    return text.isEmpty ? nil : .text(text)
                 } else if let childElement = node.toElement() {
                     // br 태그는 특별 처리
                     if childElement.tag == "br" {
-                        return .newLine
+                        return .text("\n")
                     }
                     return .node(try elementToHTMLNode(element: childElement))
                 }
@@ -139,9 +156,15 @@ SwiftSoup is a Swift port of Java's JSoup HTML parser. It supports CSS selectors
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.0.0")
+    // Latest mainline (SwiftSoup default branch is `master`).
+    .package(url: "https://github.com/scinfu/SwiftSoup.git", branch: "master")
+    // Or pin to the latest stable tag:
+    // .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.11.3")
 ]
 ```
+
+> 참고: SwiftSoup의 기본 브랜치는 현재 `master`입니다. 최신 메인라인을 추적하려면 `branch: "master"`를 사용하세요. 안정 버전은 최신 릴리스를 사용하세요(현재 2.11.3).
+> Note: SwiftSoup's default branch is currently `master`. Use `branch: "master"` to track the latest mainline. For stable builds, pin the latest release (currently 2.11.3).
 
 ### 구현 / Implementation
 
@@ -179,11 +202,11 @@ struct HTMLSwiftSoupParser: HTMLParserable {
         let children: [HTMLChild] = try element.getChildNodes().compactMap { node in
             if let textNode = node as? TextNode {
                 let text = textNode.text()
-                return text.isEmpty ? nil : .trimmingText(text)
+                return text.isEmpty ? nil : .text(text)
             } else if let elementNode = node as? Element {
                 // br 태그는 특별 처리
                 if elementNode.tagName() == "br" {
-                    return .newLine
+                    return .text("\n")
                 }
                 return .node(try elementToHTMLNode(element: elementNode))
             }
@@ -216,6 +239,8 @@ struct ContentView: View {
     }
 }
 ```
+
+> Example app note: The SwiftUIHTML Example app includes a SwiftSoup parser sample that appears when SwiftSoup is linked into the target (guarded by `#if canImport(SwiftSoup)`).
 
 ---
 

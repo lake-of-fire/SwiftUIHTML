@@ -21,6 +21,7 @@
 - **CSS Style Support**: Full inline style support (padding, margin, background, border, etc.)
 - **Flexible Parser Integration**: Works with external parsers like Fuzi and SwiftSoup
 - **Environment Value System**: Global configuration and style customization
+- **Profiling Hooks**: Optional signposts for HTML parsing via `SWIFTUIHTML_SIGNPOSTS=1`
 
 ---
 
@@ -32,9 +33,11 @@
 |----------|------|
 | **Block** | `div`, `body`, `p`, `header`, `main`, `section`, `footer`, `h1`, `h2` |
 | **Inline** | `span`, `a`, `b`, `strong`, `i`, `em`, `u` |
-| **Attachment** | `img` |
+| **Attachment** | `img`, `ruby` |
 
 > Note: Tags like h3, ul, video can be registered as custom tags.
+
+> Note: `ruby` renders `<ruby><rt>` annotations via CoreText. `<rt>` text is used for the ruby string; `<rp>`/`<rtc>` are ignored.
 
 ### CSS Style Properties
 - **Text Styles**: `color`, `background-color`, `font-family`, `font-size`, `line-height`, `word-break`
@@ -42,6 +45,7 @@
 - **Inline Styles**: `color`, `background-color`, `border-radius` (inline elements: strong, em, span, etc.)
 
 > **Note**: `padding` and `margin` are not supported for inline elements (span, strong, em, etc.).
+> **Ruby options**: `ruby-position` (`before`, `after`, `interCharacter`, `inline`), `ruby-scale` (e.g. `0.58`), `ruby-font-name`, `ruby-font-size`, `ruby-annotation-font-name`, `ruby-annotation-font-size`.
 
 ---
 
@@ -83,11 +87,44 @@ struct ContentView: View {
     
     func createStyleContainer() -> HTMLStyleContainer {
         var container = HTMLStyleContainer()
-        container.uiFont = .systemFont(ofSize: 16)
+#if os(macOS)
+        let font = NSFont.systemFont(ofSize: 16)
+#else
+        let font = UIFont.systemFont(ofSize: 16)
+#endif
+        container.uiFont = font
         container.lineBreakMode = .byWordWrapping
         return container
     }
 }
+```
+
+### Profiling
+
+Set `SWIFTUIHTML_SIGNPOSTS=1` in your environment to emit signposts around HTML parsing, then use Instruments to view the “HTML parse” intervals.
+For perf comparisons, you can also toggle `SWIFTUIHTML_CACHE_FRAMESETTER=1` and use `SWIFTUIHTML_DISABLE_RANGE_SCAN_OPT=1` to force the legacy range scan path.
+
+### Performance Tests
+
+The SwiftUIHTML package includes lightweight performance smoke tests that log the median parse time for synthetic HTML (and SwiftSoup when available). Run `swift test` in the SwiftUIHTML package to see the output.
+
+### Ruby Example
+
+```swift
+let html = """
+    <p>
+        <ruby ruby-position="after" ruby-scale="0.5">
+            今日<rt>きょう</rt>
+        </ruby>
+        is sunny.
+    </p>
+    <p>
+        <ruby ruby-font-size="22" ruby-annotation-font-size="12">
+            明日<rt>あした</rt>
+        </ruby>
+        is clear too.
+    </p>
+    """
 ```
 
 ### Parser Implementation
@@ -165,6 +202,8 @@ Protocol for external HTML parser integration
 ## 📱 Example Project
 
 For more examples, please refer to the project in the `Example` folder.
+The Testing section includes a "Synthetic Stress" sample for profiling large HTML payloads.
+When SwiftSoup is linked, the Parser Integration section includes a SwiftSoup parser sample.
 
 ---
 

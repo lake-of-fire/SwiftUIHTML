@@ -55,19 +55,20 @@ private extension HTMLBlock {
 
     func groupContents(contents: [TagElement]) -> [GroupContent] {
         var result: [GroupContent] = []
+        result.reserveCapacity(contents.count)
         var currentInlineGroup: [InlineElement] = []
 
-        contents.forEach { content in
+        for content in contents {
             switch content {
             case let .block(blockElement):
                 if !currentInlineGroup.isEmpty {
                     result.append(.inline(currentInlineGroup))
-                    currentInlineGroup.removeAll()
+                    currentInlineGroup.removeAll(keepingCapacity: true)
                 }
-                result += [.block(blockElement)]
+                result.append(.block(blockElement))
 
             case let .inline(inlineElement):
-                currentInlineGroup += [inlineElement]
+                currentInlineGroup.append(inlineElement)
             }
         }
 

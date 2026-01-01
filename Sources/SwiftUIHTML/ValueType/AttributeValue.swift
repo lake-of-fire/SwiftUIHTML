@@ -32,7 +32,7 @@ public struct AttributeValue: Sendable, Hashable {
     }
     
     public var cssStyle: CSSStyle? {
-        CSSStyle(style: rawValue)
+        CSSStyle.cached(style: rawValue)
     }
     
     public func toBool() -> Bool? {

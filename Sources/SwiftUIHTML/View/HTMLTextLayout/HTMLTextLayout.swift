@@ -2,13 +2,15 @@
 import SwiftUI
 
 struct HTMLTextLayout: View {
-    var texts: [TextType]
+    let texts: [TextType]
+    let attachmentTexts: [TextType]
     
     @ObservedObject var attachmentManager: AttachmentManager
     @HTMLEnvironment(\._configuration) var configuration
 
     init(attachmentManager: AttachmentManager, texts: [TextType]) {
         self.texts = texts
+        self.attachmentTexts = texts.filter(\.hasAttachment)
         self.attachmentManager = attachmentManager
         attachmentManager.setTexts(texts)
     }
@@ -24,10 +26,6 @@ struct HTMLTextLayout: View {
                 attachmentView(for: text)
             }
         }
-    }
-
-    private var attachmentTexts: [TextType] {
-        texts.filter(\.hasAttachment)
     }
 
     @ViewBuilder

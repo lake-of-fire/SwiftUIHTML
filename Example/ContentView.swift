@@ -40,6 +40,7 @@ enum SampleCategory: String, CaseIterable, Identifiable {
                 SampleItem(title: "Text Styling", description: "Bold, italic, underline", view: TextStyleSample()),
                 SampleItem(title: "Image & Links", description: "Images and links example", view: ImageLinkSample()),
                 SampleItem(title: "Block Elements", description: "Block element structure", view: BlockElementSample()),
+                SampleItem(title: "Ruby Tags", description: "Ruby annotations with rt", view: RubyTagSample()),
                 SampleItem(title: "Line Break Modes", description: "Line break mode comparison", view: LineBreakSample())
             ]
         case .styling:
@@ -57,13 +58,18 @@ enum SampleCategory: String, CaseIterable, Identifiable {
                 SampleItem(title: "Highlight Tag", description: "Highlight inline tag", view: HighlightTagSample())
             ]
         case .parserIntegration:
-            return [
+            var items: [SampleItem] = [
                 SampleItem(title: "Current Parser", description: "Currently used Fuzi parser", view: AnyView(CurrentParserSample())),
                 SampleItem(title: "Complex HTML", description: "Complex HTML structure parsing", view: AnyView(ComplexHTMLSample()))
             ]
+#if canImport(SwiftSoup)
+            items.append(SampleItem(title: "SwiftSoup Parser", description: "Parser integration sample", view: AnyView(SwiftSoupParserSample())))
+#endif
+            return items
         case .testing:
             return [
-                SampleItem(title: "Snapshot Test Preview", description: "Snapshot test preview - Image positioning and line height", view: SnapshotTestSample())
+                SampleItem(title: "Snapshot Test Preview", description: "Snapshot test preview - Image positioning and line height", view: SnapshotTestSample()),
+                SampleItem(title: "Synthetic Stress", description: "Large synthetic HTML payload", view: SyntheticStressSample())
             ]
         }
     }

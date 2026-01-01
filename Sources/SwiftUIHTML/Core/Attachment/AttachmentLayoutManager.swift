@@ -6,6 +6,9 @@ import AppKit
 #else
 import UIKit
 #endif
+#if canImport(os)
+import os
+#endif
 
 final class AttachmentLayoutEngine {
     
@@ -15,8 +18,18 @@ final class AttachmentLayoutEngine {
     private var keyAttachment: [AnyHashable: Weak<TextAttachment>] = [:]
     private var frameStore: [AnyHashable: CGRect] = [:]
     private var texts: [TextType] = []
+    private var preparedString: NSMutableAttributedString?
+    private var targetCache: [(value: TextAttachment, range: NSRange)] = []
+    private var attachmentKeys: [AnyHashable] = []
+    private var attachmentRanges: [NSRange] = []
+    private var attachmentSizePublishers: [AnyPublisher<CGRect, Never>] = []
     private var textRangeFrameCalculator = TextRangeFrameCalculator()
     private var cancelBag = Set<AnyCancellable>()
+#if canImport(os)
+    private static let signposter = OSSignposter(
+        logHandle: OSLog(subsystem: "SwiftUIHTML", category: "AttachmentLayout")
+    )
+#endif
 
     var lineSpacing: CGFloat {
         get { textRangeFrameCalculator.lineSpacing }
@@ -37,6 +50,7 @@ final class AttachmentLayoutEngine {
         let containerSizePublisher = _containerSize.projectedValue
             .compactMap { $0 }
             .removeDuplicates()
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
 
         Publishers
             .CombineLatest(attributedStringPublisher, containerSizePublisher)
@@ -72,21 +86,45 @@ final class AttachmentLayoutEngine {
     }
 
     func setContainerSize(_ size: CGSize) {
+        if containerSize == size {
+            return
+        }
         containerSize = size
     }
 
     @MainActor
     func setTexts(_ texts: [TextType]) {
-        let hasAttachment = !texts.lazy.filter(\.hasAttachment).isEmpty
+        let hasAttachment = texts.contains(where: \.hasAttachment)
         guard hasAttachment else {
             self.texts = []
             self.attributedString = nil
+            self.preparedString = nil
+            self.targetCache = []
+            self.attachmentKeys = []
+            self.attachmentRanges = []
+            self.attachmentSizePublishers = []
             return
         }
         
         guard self.texts != texts else { return }
         self.texts = texts
-        attributedString = makeAttributedString(texts: texts)
+        let newAttributedString = makeAttributedString(texts: texts)
+        attributedString = newAttributedString
+        preparedString = textRangeFrameCalculator.prepareCoreTextString(newAttributedString)
+        targetCache = textRangeFrameCalculator.findAttribute(
+            in: newAttributedString,
+            for: .attachment,
+            type: TextAttachment.self
+        )
+        attachmentKeys = targetCache.map(\.value.key)
+        attachmentRanges = targetCache.map(\.range)
+        attachmentSizePublishers = targetCache.map { target in
+            target.value
+                .publisher(for: \.bounds)
+                .removeDuplicates()
+                .filter { $0.size > .invisible }
+                .eraseToAnyPublisher()
+        }
     }
 
 
@@ -146,27 +184,32 @@ private extension AttachmentLayoutEngine {
 
 
     func measureLayoutPublisher(attributedString: NSMutableAttributedString, containerSize: CGSize) -> AnyPublisher<[(AnyHashable, CGRect)], Never> {
-        let coreTextString = textRangeFrameCalculator
-            .prepareCoreTextString(attributedString)
+        let coreTextString = preparedString ?? textRangeFrameCalculator.prepareCoreTextString(attributedString)
 
-        let targets = textRangeFrameCalculator
-            .findAttribute(in: attributedString, for: .attachment, type: TextAttachment.self)
+        let targets = targetCache
+        if targets.isEmpty {
+            return Just([]).eraseToAnyPublisher()
+        }
 
-        let attchmentSizeChange = targets
-            .map { target in
-                target.value
-                    .publisher(for: \.bounds)
-                    .removeDuplicates()
-                    .filter { $0.size > .invisible }
-            }
+        let keys = attachmentKeys
+        let ranges = attachmentRanges
 
-        let keys = targets.map(\.value.key)
-        let ranges = targets.map(\.range)
-
-        return Publishers.MergeMany(attchmentSizeChange)
+        let sizePublishers = attachmentSizePublishers
+        return Publishers.MergeMany(sizePublishers)
             .receive(on: DispatchQueue.global(qos: .background))
             .compactMap { [weak textRangeFrameCalculator] _ in
-                textRangeFrameCalculator?
+#if canImport(os)
+                let shouldSignpost = ProcessInfo.processInfo.environment["SWIFTUIHTML_SIGNPOSTS"] == "1"
+                let intervalState = shouldSignpost
+                    ? AttachmentLayoutEngine.signposter.beginInterval("Attachment layout", "\(ranges.count) ranges")
+                    : nil
+                defer {
+                    if let intervalState {
+                        AttachmentLayoutEngine.signposter.endInterval("Attachment layout", intervalState)
+                    }
+                }
+#endif
+                return textRangeFrameCalculator?
                     .measureLayout(for: coreTextString, in: containerSize, by: ranges)
             }
             .map { zip(keys, $0).map { ($0, $1) } }
@@ -175,15 +218,24 @@ private extension AttachmentLayoutEngine {
 
 
     func storeRangeBounds(key: AnyHashable, bounds: CGRect) {
+        if let existing = frameStore[key], existing == bounds {
+            return
+        }
         frameStore[key] = bounds
         layoutUpdatePublisher.send(())
     }
 
     func storeRangeBounds(_ values: [(key: AnyHashable, bounds: CGRect)]) {
+        var didChange = false
         values.forEach {
-            frameStore[$0.key] = $0.bounds
+            if frameStore[$0.key] != $0.bounds {
+                frameStore[$0.key] = $0.bounds
+                didChange = true
+            }
         }
-        layoutUpdatePublisher.send(())
+        if didChange {
+            layoutUpdatePublisher.send(())
+        }
     }
 }
 

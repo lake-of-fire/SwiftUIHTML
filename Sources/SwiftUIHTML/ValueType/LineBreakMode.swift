@@ -16,7 +16,7 @@ extension LineBreakMode {
             return text.byCharWrapping()
         case .byWordWrapping:
             return text
-        case .custom(let id, let transform):
+        case .custom(_, let transform):
             return transform(text)
         }
     }
