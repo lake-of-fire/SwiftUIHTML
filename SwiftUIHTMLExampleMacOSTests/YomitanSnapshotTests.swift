@@ -1,13 +1,15 @@
-//  Copyright © 2025 PRND. All rights reserved.
-#if os(iOS)
+//  Copyright © 2026 PRND. All rights reserved.
+#if os(macOS)
 import SwiftUI
 import Testing
+import SnapshotTesting
 
 @testable import SwiftUIHTML
 @testable import SwiftUIHTMLExample
 
-class HTMLBasicTests {
-    
+private let iosSnapshotDirectory = MacViewSnapshotTester.iosSnapshotDirectory()
+
+struct HTMLBasicMacOSTests {
     @MainActor
     @Test(arguments: [LineBreakMode.byWordWrapping, LineBreakMode.byCharWrapping])
     func testingBasicHTMLElements(lineBreakMode: LineBreakMode) async throws {
@@ -55,10 +57,11 @@ class HTMLBasicTests {
             .frame(width: 375)
             .fixedSize(horizontal: true, vertical: false)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 375,
             named: "\(lineBreakMode)",
-            sleep: .seconds(2)
+            snapshotDirectory: iosSnapshotDirectory
         )
     }
 
@@ -84,10 +87,12 @@ class HTMLBasicTests {
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 233, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
-        try? await ViewSnapshotTester.snapshot(
+
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 233,
             named: "\(lineBreakMode)",
-            sleep: .seconds(2)
+            snapshotDirectory: iosSnapshotDirectory
         )
     }
 
@@ -110,7 +115,7 @@ class HTMLBasicTests {
         
             <section>
                 <h2>Inline Image Element</h2>
-                <p>This text contains an inline image: <img src="https://picsum.photos/id/237/50/50" width="8" height="8" alt="Small inline image"> This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: Thinline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image:<img src="https://picsum.photos/id/12/50/50" width="4" height="4" alt="Small inline image"> This text contains an inline image: This text contains an inline image: Thinline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: Thinline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: Thinline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: <img src="https://picsum.photos/id/237/50/50" width="50" height="50" alt="Small inline image"> and continues after it.</p>
+                <p>This text contains an inline image: <img src="https://picsum.photos/id/237/50/50" width="8" height="8" alt="Small inline image"> This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: Thinline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: Thinline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: This text contains an inline image: <img src="https://picsum.photos/id/237/50/50" width="50" height="50" alt="Small inline image"> and continues after it.</p>
                 <p>Another paragraph with an inline image <img src="https://picsum.photos/id/100/50/50" width="50" height="50" alt="Another small inline image"> within the text flow. This text contains an inline image: <img src="https://picsum.photos/id/237/50/50" width="50" height="50" alt="Small inline image"> and continues after it. Another paragraph with an inline image <img src="https://picsum.photos/id/100/50/50" width="50" height="50" alt="Another small inline image"> within the text flow.</p> 
             </section>
         
@@ -147,9 +152,11 @@ class HTMLBasicTests {
             .frame(width: width)
             .fixedSize(horizontal: false, vertical: true)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: width,
             named: "\(Int(width)),\(lineBreakMode)",
+            snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(2)
         )
     }
@@ -178,12 +185,13 @@ class HTMLBasicTests {
             }
             .fixedSize(horizontal: false, vertical: true)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 375,
+            snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(3)
         )
     }
-
 
     @MainActor
     @Test(arguments: [LineBreakMode.byWordWrapping, LineBreakMode.byCharWrapping])
@@ -231,10 +239,12 @@ class HTMLBasicTests {
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 375)
             .fixedSize(horizontal: true, vertical: false)
-        try? await ViewSnapshotTester.snapshot(
+
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 375,
             named: "\(lineBreakMode)",
-            sleep: .seconds(2)
+            snapshotDirectory: iosSnapshotDirectory
         )
     }
 
@@ -264,9 +274,11 @@ class HTMLBasicTests {
             .frame(width: 375)
             .fixedSize(horizontal: false, vertical: true)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 375,
             named: "imagePositionAndLineHeight",
+            snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(2)
         )
     }
@@ -294,9 +306,11 @@ class HTMLBasicTests {
             .frame(width: 350)
             .fixedSize(horizontal: false, vertical: true)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 350,
             named: "nonEnglishTextWithImages",
+            snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(3)
         )
     }
@@ -321,10 +335,11 @@ class HTMLBasicTests {
             .frame(width: 280)
             .fixedSize(horizontal: false, vertical: true)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 280,
             named: "longWordsWithImages_\(lineBreakMode)",
-            sleep: .seconds(2)
+            snapshotDirectory: iosSnapshotDirectory
         )
     }
 
@@ -361,9 +376,11 @@ class HTMLBasicTests {
             .frame(width: 375)
             .fixedSize(horizontal: false, vertical: true)
 
-        try? await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 375,
             named: "complexImageLayout",
+            snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(3)
         )
     }
@@ -468,15 +485,17 @@ class HTMLBasicTests {
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
             .fixedSize(horizontal: true, vertical: false)
-        try? await ViewSnapshotTester.snapshot(
+
+        try await MacViewSnapshotTester.snapshot(
             of: view,
-            sleep: .seconds(2)
+            width: 375,
+            snapshotDirectory: iosSnapshotDirectory
         )
     }
 
     @MainActor
-    @Test("Yomitan entry snapshot")
-    func testYomitanEntrySnapshot() async throws {
+    @Test("Yomitan entry snapshot (macOS)")
+    func testYomitanEntrySnapshotMacOS() async throws {
         let html = """
         <div class="yomitan-entry" style="line-height: 1.4">
             <div class="yomitan-headword" style="margin-bottom: 4">
@@ -504,32 +523,13 @@ class HTMLBasicTests {
             .frame(width: 320)
             .fixedSize(horizontal: false, vertical: true)
 
-        try await ViewSnapshotTester.snapshot(
+        try await MacViewSnapshotTester.snapshot(
             of: view,
+            width: 320,
             named: "yomitanEntry",
+            snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(2)
         )
     }
 }
 #endif
-
-
-extension UIView {
-    func pinToTopLeading(of superview: UIView, topInset: CGFloat = 0, leadingInset: CGFloat = 0) {
-        translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-            topAnchor.constraint(equalTo: superview.topAnchor, constant: topInset),
-            leadingAnchor.constraint(equalTo: superview.leadingAnchor, constant: leadingInset)
-        ])
-    }
-}
-
-extension HTMLStyleContainer {
-    static func totalInfo() -> HTMLStyleContainer {
-        var style = HTMLStyleContainer()
-        style.uiFont = .systemFont(ofSize: 14)
-        style.textLine = .lineSpacing(spacing: 24)
-        return style
-    }
-}

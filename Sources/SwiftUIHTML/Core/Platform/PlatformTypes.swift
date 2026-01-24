@@ -20,7 +20,15 @@ internal typealias PlatformFontDescriptor = UIFontDescriptor
 
 internal extension PlatformFont {
     var manabiCTFont: CTFont {
-        CTFontCreateWithName(fontName as CFString, pointSize, nil)
+        if fontName.hasPrefix(".SF") || fontName.contains("SFUI") || fontName.contains("SFNS") {
+            AttachmentDebugLogger.recordOnce(
+                "font:\(fontName):\(pointSize)",
+                message: "[Font] system font name=\(fontName) size=\(pointSize)"
+            )
+            return CTFontCreateUIFontForLanguage(.system, pointSize, nil)
+                ?? CTFontCreateWithName(fontName as CFString, pointSize, nil)
+        }
+        return CTFontCreateWithName(fontName as CFString, pointSize, nil)
     }
 
     var manabiLineHeight: CGFloat {

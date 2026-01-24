@@ -9,17 +9,25 @@ struct ImageTag: InlineAttachmentTag {
         self.attributes = attributes
     }
     var body: some View {
+        let size = ElementSize(attributes: attributes)
         AsyncImage(url: attributes["src"]?.url) { phase in
             switch phase {
             case .success(let image):
-                ImageContainer(
-                    image: image,
-                    size: ElementSize(attributes: attributes)
-                )
+                ImageContainer(image: image, size: size)
             default:
-                Color.clear
-                    .frame(width: 1, height: 1)
+                ImagePlaceholder(size: size)
             }
+        }
+    }
+}
+
+private struct ImagePlaceholder: View {
+    let size: ElementSize
+    var body: some View {
+        if size.width == nil && size.height == nil {
+            Color.clear.frame(width: 1, height: 1)
+        } else {
+            Color.clear.modifier(SizeModifier(size: size))
         }
     }
 }

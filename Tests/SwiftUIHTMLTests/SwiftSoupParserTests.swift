@@ -99,6 +99,7 @@ struct SwiftSoupParserTests {
         let linkNode = firstNode(tag: "a", in: root)
         #expect(linkNode?.attributes["href"]?.string == "https://example.com")
     }
+
 }
 
 private struct HTMLSwiftSoupParser: HTMLParserable {

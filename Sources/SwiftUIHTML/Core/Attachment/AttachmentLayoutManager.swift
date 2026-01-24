@@ -29,6 +29,7 @@ final class AttachmentLayoutEngine {
     private static let signposter = OSSignposter(
         logHandle: OSLog(subsystem: "SwiftUIHTML", category: "AttachmentLayout")
     )
+    private static let logger = Logger(subsystem: "SwiftUIHTML", category: "AttachmentLayout")
 #endif
 
     var lineSpacing: CGFloat {
@@ -40,6 +41,25 @@ final class AttachmentLayoutEngine {
 
     init() {
         setup()
+    }
+
+    private var shouldLog: Bool {
+        ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_LOGS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
+            || NSClassFromString("XCTestCase") != nil
+    }
+
+    private func log(_ message: @autoclosure () -> String) {
+        guard shouldLog else { return }
+        let rendered = message()
+        AttachmentDebugLogger.record("[AttachmentLayout] \(rendered)")
+#if canImport(os)
+        if #available(iOS 14.0, macOS 11.0, *) {
+            AttachmentLayoutEngine.logger.debug("\(rendered, privacy: .public)")
+        }
+#endif
+        NSLog("[SwiftUIHTML][AttachmentLayout] %@", rendered)
+        print("[SwiftUIHTML][AttachmentLayout] \(rendered)")
     }
 
     func setup() {
@@ -70,6 +90,7 @@ final class AttachmentLayoutEngine {
         let oldSize = textAttachment.value?.bounds.size ?? .zero
         guard oldSize != size else { return }
         textAttachment.value?.updateSize(size)
+        log("setSize key=\(key) size=\(size)")
         layoutUpdatePublisher.send(())
     }
 
@@ -81,7 +102,9 @@ final class AttachmentLayoutEngine {
     func getOffset(key: AnyHashable) -> CGPoint {
         let point = frameStore[key]?.origin ?? .zero
         guard let textAttachment = keyAttachment[key] else { return point }
-        return textAttachment.value?.getAdjustedOffset(point: point) ?? point
+        let adjusted = textAttachment.value?.getAdjustedOffset(point: point) ?? point
+        log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted)")
+        return adjusted
 
     }
 
@@ -90,6 +113,7 @@ final class AttachmentLayoutEngine {
             return
         }
         containerSize = size
+        log("setContainerSize \(size)")
     }
 
     @MainActor
@@ -146,6 +170,12 @@ private extension AttachmentLayoutEngine {
         for element in texts {
             switch element {
             case let .text(string, styleContainer):
+                if let uiFont = styleContainer.uiFont {
+                    AttachmentDebugLogger.recordOnce(
+                        "uiFont:\(uiFont.fontName):\(uiFont.pointSize)",
+                        message: "[Font] uiFont name=\(uiFont.fontName) size=\(uiFont.pointSize)"
+                    )
+                }
                 let text = makeAttributedString(
                     string: string,
                     styleContainer: styleContainer
@@ -153,6 +183,12 @@ private extension AttachmentLayoutEngine {
                 attributedString.append(text)
 
             case let .newLine(styleContainer):
+                if let uiFont = styleContainer.uiFont {
+                    AttachmentDebugLogger.recordOnce(
+                        "uiFont:\(uiFont.fontName):\(uiFont.pointSize)",
+                        message: "[Font] uiFont name=\(uiFont.fontName) size=\(uiFont.pointSize)"
+                    )
+                }
                 let text = makeAttributedString(
                     string: "\n",
                     styleContainer: styleContainer
@@ -160,6 +196,12 @@ private extension AttachmentLayoutEngine {
                 attributedString.append(text)
 
             case let .attachment(_, _, _, styleContainer):
+                if let uiFont = styleContainer.uiFont {
+                    AttachmentDebugLogger.recordOnce(
+                        "uiFont:\(uiFont.fontName):\(uiFont.pointSize)",
+                        message: "[Font] uiFont name=\(uiFont.fontName) size=\(uiFont.pointSize)"
+                    )
+                }
                 let attachment = TextAttachment(
                     key: element,
                     styleContainer: styleContainer
@@ -222,6 +264,8 @@ private extension AttachmentLayoutEngine {
             return
         }
         frameStore[key] = bounds
+        let container = containerSize ?? .zero
+        log("storeRangeBounds key=\(key) bounds=\(bounds) container=\(container)")
         layoutUpdatePublisher.send(())
     }
 
@@ -234,6 +278,8 @@ private extension AttachmentLayoutEngine {
             }
         }
         if didChange {
+            let container = containerSize ?? .zero
+            log("storeRangeBounds batch count=\(values.count) container=\(container)")
             layoutUpdatePublisher.send(())
         }
     }

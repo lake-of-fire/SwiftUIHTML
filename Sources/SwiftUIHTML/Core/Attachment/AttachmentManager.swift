@@ -2,11 +2,22 @@
 import Combine
 import CoreGraphics
 import Foundation
+#if canImport(os)
+import os
+#endif
 
 
 final class AttachmentManager: ObservableObject {
     lazy var layoutEngine = AttachmentLayoutEngine()
     private var cancellables = Set<AnyCancellable>()
+    private var shouldLog: Bool {
+        ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_LOGS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
+            || NSClassFromString("XCTestCase") != nil
+    }
+#if canImport(os)
+    private static let logger = Logger(subsystem: "SwiftUIHTML", category: "AttachmentManager")
+#endif
 
     private class ImageCache: NSCache<AttachmentImageCacheKey, PlatformImage> {}
     private let textImages = ImageCache()
@@ -36,16 +47,22 @@ final class AttachmentManager: ObservableObject {
         layoutEngine.setSize(key: key, size: size)
         //NOTE: lineSpacing 각각 다를 수 있음
         layoutEngine.lineSpacing = styleContainer.textLine?.lineSpacing ?? 0
+        log("setAttachmentSize key=\(key) size=\(size) lineSpacing=\(layoutEngine.lineSpacing)")
     }
 
     func offset(key: AnyHashable) -> CGSize {
         let point = layoutEngine.getOffset(key: key)
+        log("offset key=\(key) point=\(point)")
         return CGSize(width: point.x, height: point.y)
     }
 
     // SwiftUI Text(image:) 주입 이미지
     func sizeImage(key: AnyHashable, styleContainer: HTMLStyleContainer) -> PlatformImage {
-        let size = layoutEngine.getSize(key: key)
+        var size = layoutEngine.getSize(key: key)
+        if size == .zero, let fallbackSize = fallbackAttachmentSize(for: key) {
+            size = fallbackSize
+            log("fallback size key=\(key) size=\(size)")
+        }
         if size == .zero {
             return PlatformImage.manabiEmpty(size: .zero)
         }
@@ -70,12 +87,35 @@ final class AttachmentManager: ObservableObject {
         return image
     }
 
+    private func fallbackAttachmentSize(for key: AnyHashable) -> CGSize? {
+        guard let textType = key.base as? TextType else { return nil }
+        guard case let .attachment(_, _, attributes, _) = textType else { return nil }
+        let elementSize = ElementSize(attributes: attributes)
+        guard let width = elementSize.width ?? elementSize.height,
+              let height = elementSize.height ?? elementSize.width else {
+            return nil
+        }
+        return CGSize(width: max(1, width), height: max(1, height))
+    }
+
     func clearImageCache() {
         textImages.removeAllObjects()
     }
 }
 
 private extension AttachmentManager {
+    func log(_ message: @autoclosure () -> String) {
+        guard shouldLog else { return }
+        let rendered = message()
+        AttachmentDebugLogger.record("[AttachmentManager] \(rendered)")
+#if canImport(os)
+        if #available(iOS 14.0, macOS 11.0, *) {
+            AttachmentManager.logger.debug("\(rendered, privacy: .public)")
+        }
+#endif
+        NSLog("[SwiftUIHTML][AttachmentManager] %@", rendered)
+        print("[SwiftUIHTML][AttachmentManager] \(rendered)")
+    }
 }
 
 private struct EmptyImage {

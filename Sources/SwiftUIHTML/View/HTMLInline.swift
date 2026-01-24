@@ -12,6 +12,7 @@ struct HTMLInline: View {
     let hasAttachment: Bool
     let textLine: TextLine
     @StateObject var attachmentManager = AttachmentManager()
+    @HTMLEnvironment(\.styleContainer) private var styleContainer
 
     init(elements: [InlineElement]) {
         self.init(texts: elements.toHTMLTextType())
@@ -29,6 +30,24 @@ struct HTMLInline: View {
             .fixedSize(horizontal: false, vertical: true)
             .overlay(alignment: .topLeading) { htmlTextLayout }
             .modifier(TextLineModifier(textLine: textLine))
+            .onAppear {
+                let styleLineSpacing = styleContainer.textLine?.lineSpacing ?? 0
+                let styleVerticalPadding = styleContainer.textLine?.verticalPadding ?? 0
+                let effectiveLineSpacing = max(textLine.lineSpacing, styleLineSpacing)
+                let effectiveVerticalPadding = max(textLine.verticalPadding, styleVerticalPadding)
+                AttachmentDebugLogger.record(
+                    "[Inline] textLine spacing=\(textLine.lineSpacing) verticalPadding=\(textLine.verticalPadding) styleLineSpacing=\(styleLineSpacing) styleVerticalPadding=\(styleVerticalPadding) effectiveLineSpacing=\(effectiveLineSpacing) effectiveVerticalPadding=\(effectiveVerticalPadding)"
+                )
+            }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .hidden()
+                        .modifier(OnChangeViewModifier(of: proxy.size, initial: true) { _, newValue in
+                            AttachmentDebugLogger.record("[Inline] contentSize=\(newValue)")
+                        })
+                }
+            )
     }
 
     @ViewBuilder
