@@ -91,7 +91,8 @@ final class AttachmentLayoutEngine {
         guard oldSize != size else { return }
         textAttachment.value?.updateSize(size)
         log("setSize key=\(key) size=\(size)")
-        layoutUpdatePublisher.send(())
+        recalculateLayoutIfPossible()
+        notifyLayoutUpdate()
     }
 
     func getSize(key: AnyHashable) -> CGSize {
@@ -100,9 +101,18 @@ final class AttachmentLayoutEngine {
     }
 
     func getOffset(key: AnyHashable) -> CGPoint {
-        let point = frameStore[key]?.origin ?? .zero
+        let rect = frameStore[key]
+        let point = rect?.origin ?? .zero
         guard let textAttachment = keyAttachment[key] else { return point }
-        let adjusted = textAttachment.value?.getAdjustedOffset(point: point) ?? point
+        if ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1" {
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) textKit=on")
+            return point
+        }
+        let lineHeightOverride = rect?.height ?? 0
+        let adjusted = textAttachment.value?.getAdjustedOffset(
+            point: point,
+            lineHeightOverride: lineHeightOverride > 0 ? lineHeightOverride : nil
+        ) ?? point
         log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted)")
         return adjusted
 
@@ -114,6 +124,7 @@ final class AttachmentLayoutEngine {
         }
         containerSize = size
         log("setContainerSize \(size)")
+        recalculateLayoutIfPossible()
     }
 
     @MainActor
@@ -129,9 +140,11 @@ final class AttachmentLayoutEngine {
             self.attachmentSizePublishers = []
             return
         }
-        
+
         guard self.texts != texts else { return }
         self.texts = texts
+        lineSpacing = resolveLineSpacing(texts: texts)
+        log("resolved lineSpacing=\(lineSpacing)")
         let newAttributedString = makeAttributedString(texts: texts)
         attributedString = newAttributedString
         preparedString = textRangeFrameCalculator.prepareCoreTextString(newAttributedString)
@@ -143,24 +156,114 @@ final class AttachmentLayoutEngine {
         attachmentKeys = targetCache.map(\.value.key)
         attachmentRanges = targetCache.map(\.range)
         attachmentSizePublishers = targetCache.map { target in
-            target.value
+            let initialBounds = target.value.bounds
+            let seedBounds = initialBounds.size > .invisible
+                ? initialBounds
+                : CGRect(origin: .zero, size: CGSize(width: 1, height: 1))
+            return target.value
                 .publisher(for: \.bounds)
+                .prepend(seedBounds)
                 .removeDuplicates()
                 .filter { $0.size > .invisible }
                 .eraseToAnyPublisher()
         }
+        logAttachmentCounts(expected: texts.filter(\.hasAttachment).count)
     }
 
 
 }
 
 private extension AttachmentLayoutEngine {
+    func resolveLineSpacing(texts: [TextType]) -> CGFloat {
+        var maxLineSpacing: CGFloat = 0
+        for text in texts {
+            switch text {
+            case let .text(_, styleContainer):
+                if let lineSpacing = styleContainer.textLine?.lineSpacing {
+                    maxLineSpacing = max(maxLineSpacing, lineSpacing)
+                }
+            case let .attachment(_, _, _, styleContainer):
+                if let lineSpacing = styleContainer.textLine?.lineSpacing {
+                    maxLineSpacing = max(maxLineSpacing, lineSpacing)
+                }
+            default:
+                continue
+            }
+        }
+        return maxLineSpacing
+    }
+
+    func logAttachmentCounts(expected: Int) {
+        guard shouldLog else { return }
+        let uniqueKeys = Set(attachmentKeys)
+        log("attachmentCounts expected=\(expected) prepared=\(attachmentKeys.count) uniqueKeys=\(uniqueKeys.count)")
+        guard uniqueKeys.count != expected else { return }
+        var counts: [String: Int] = [:]
+        counts.reserveCapacity(attachmentKeys.count)
+        for key in attachmentKeys {
+            let summary = attachmentSummary(for: key)
+            counts[summary, default: 0] += 1
+        }
+        let duplicates = counts
+            .filter { $0.value > 1 }
+            .sorted { $0.value > $1.value }
+            .map { "\($0.key)x\($0.value)" }
+        if !duplicates.isEmpty {
+            log("attachmentKeyDuplicates \(duplicates.joined(separator: " | "))")
+        }
+    }
+
+    func attachmentSummary(for key: AnyHashable) -> String {
+        guard let textType = key.base as? TextType else {
+            return "unknown"
+        }
+        switch textType {
+        case let .attachment(id, tag, attributes, _):
+            let src = attributes["src"]?.string ?? "-"
+            let width = attributes["width"]?.string ?? "-"
+            let height = attributes["height"]?.string ?? "-"
+            return "id=\(id) tag=\(tag) src=\(src) w=\(width) h=\(height)"
+        default:
+            return "non-attachment"
+        }
+    }
+
     func set(key: AnyHashable, attachment: TextAttachment) {
         guard let _attachment = keyAttachment[key] else {
             keyAttachment[key] = Weak(value: attachment)
             return
         }
         _attachment.value = attachment
+    }
+
+    func recalculateLayoutIfPossible() {
+        guard let preparedString, let attributedString, let container = containerSize else { return }
+        guard !attachmentRanges.isEmpty else { return }
+        let frames: [CGRect]
+#if os(macOS)
+        if ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1" {
+            frames = textRangeFrameCalculator.measureLayoutWithTextKit(
+                attributedString: attributedString,
+                in: container,
+                by: attachmentRanges
+            )
+            log("layoutEngine=TextKit")
+        } else {
+            frames = textRangeFrameCalculator.measureLayout(
+                for: preparedString,
+                in: container,
+                by: attachmentRanges
+            )
+        }
+#else
+        frames = textRangeFrameCalculator.measureLayout(
+            for: preparedString,
+            in: container,
+            by: attachmentRanges
+        )
+#endif
+        let values = zip(attachmentKeys, frames).map { (key: $0, bounds: $1) }
+        storeRangeBounds(values)
     }
 
     @MainActor
@@ -266,7 +369,7 @@ private extension AttachmentLayoutEngine {
         frameStore[key] = bounds
         let container = containerSize ?? .zero
         log("storeRangeBounds key=\(key) bounds=\(bounds) container=\(container)")
-        layoutUpdatePublisher.send(())
+        notifyLayoutUpdate()
     }
 
     func storeRangeBounds(_ values: [(key: AnyHashable, bounds: CGRect)]) {
@@ -280,7 +383,14 @@ private extension AttachmentLayoutEngine {
         if didChange {
             let container = containerSize ?? .zero
             log("storeRangeBounds batch count=\(values.count) container=\(container)")
-            layoutUpdatePublisher.send(())
+            notifyLayoutUpdate()
+        }
+    }
+
+    private func notifyLayoutUpdate() {
+        layoutUpdatePublisher.send(())
+        Task {
+            await AttachmentLayoutTracker.shared.markUpdated()
         }
     }
 }
@@ -298,7 +408,12 @@ private extension NSMutableAttributedString {
         }
 
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineBreakMode = .byWordWrapping
+        switch styleContainer.lineBreakMode {
+        case .byCharWrapping:
+            paragraphStyle.lineBreakMode = .byCharWrapping
+        default:
+            paragraphStyle.lineBreakMode = .byWordWrapping
+        }
         paragraphStyle.lineBreakStrategy = .standard
 
         paragraphStyle.lineSpacing = styleContainer.textLine?.lineSpacing ?? 0

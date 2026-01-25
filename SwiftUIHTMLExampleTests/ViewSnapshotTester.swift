@@ -1,14 +1,19 @@
 //  Copyright © 2025 PRND. All rights reserved.
 #if os(iOS)
+import CryptoKit
 import SwiftUI
 import UIKit
 import XCTest
+import Vision
 
 @testable import SwiftUIHTML
 @_spi(Internals) import SnapshotTesting
 
 /// Utility class for rendering SwiftUI views in UIKit environment and generating snapshots
 class ViewSnapshotTester {
+    private static let diagnosticLogDirectory: URL = {
+        URL(fileURLWithPath: "/tmp/swiftuihtml-ios-diag", isDirectory: true)
+    }()
 
     @MainActor
     static func snapshot<V: View>(
@@ -22,72 +27,56 @@ class ViewSnapshotTester {
         line: UInt = #line,
         column: UInt = #column
     ) async throws {
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
         AttachmentDebugLogger.clear()
         AttachmentDebugLogger.record("[TestHarness] snapshot start: \(testName)")
-        // Wrap SwiftUI view as UIKit view
         let rootView = view.background(Color.white).compositingGroup().ignoresSafeArea()
-        let hostingController = UIHostingController(rootView: rootView)
-        let hostingView = hostingController.view!
+        let hostingView = UIHostingController(rootView: rootView).view!
 
-        // Create and display window
+        let viewController = UIViewController()
+        viewController.view.addSubview(hostingView)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: viewController.view.topAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: viewController.view.leadingAnchor)
+        ])
+
         let window = UIWindow(frame: UIScreen.main.bounds)
-        window.rootViewController = hostingController
+        window.rootViewController = viewController
         window.makeKeyAndVisible()
-        hostingView.frame = window.bounds
-        
-        // Wait for layout calculation time
+
         try await Task.sleep(for: sleepDuration)
 
-        // Force layout update
         await MainActor.run {
-            hostingView.layoutIfNeeded()
-            hostingView.setNeedsLayout()
+            viewController.view.layoutIfNeeded()
+            viewController.view.setNeedsLayout()
             hostingView.invalidateIntrinsicContentSize()
         }
-        await MainActor.run {
-            let bounds = window.bounds
-            let windowSafeInsets = window.safeAreaInsets
-            let hostingBounds = hostingView.bounds
-            let hostingSafeInsets = hostingView.safeAreaInsets
-            AttachmentDebugLogger.record("[Snapshot] containerBounds=\(bounds) windowSafeInsets=\(windowSafeInsets) hostingSafeInsets=\(hostingSafeInsets) hostingBounds=\(hostingBounds)")
-        }
-        
-        // Find rendered view
+
         guard let renderedView = findActualRenderedView(in: hostingView) else {
             throw SnapshotError.viewNotFound
         }
+        renderedView.layoutIfNeeded()
 
-        renderedView.layoutIfNeeded()
-        var targetSize = resolvedSize(for: hostingController, fallbackView: hostingView)
-        let windowSafeInsets = window.safeAreaInsets
-        let hostingSafeInsets = hostingView.safeAreaInsets
-        let totalTopInset = max(windowSafeInsets.top, hostingSafeInsets.top)
-        let totalBottomInset = max(windowSafeInsets.bottom, hostingSafeInsets.bottom)
-        if totalTopInset > 0 || totalBottomInset > 0 {
-            let adjustedHeight = max(1, targetSize.height - totalTopInset - totalBottomInset)
-            AttachmentDebugLogger.record("[Snapshot] effectiveSafeInsets=UIEdgeInsets(top: \(totalTopInset), left: 0.0, bottom: \(totalBottomInset), right: 0.0) adjustedHeight=\(adjustedHeight)")
-            targetSize.height = adjustedHeight
-        }
-        renderedView.bounds.size = targetSize
-        renderedView.frame.size = targetSize
-        renderedView.layoutIfNeeded()
+        let waitImages = await ImageLoadTracker.shared.waitUntilIdle(timeoutSeconds: 5)
+        AttachmentDebugLogger.record("[Snapshot] imageLoadIdle=\(waitImages)")
+        let waitLayout = await AttachmentLayoutTracker.shared.waitUntilIdle(timeoutSeconds: 3)
+        AttachmentDebugLogger.record("[Snapshot] layoutIdle=\(waitLayout)")
+        logImageViewDiagnostics(in: hostingView)
 
         let scale = UIScreen.main.scale
-        let layoutMargins = renderedView.layoutMargins
-        let renderedInsets = renderedView.safeAreaInsets
-        let intrinsicSize = renderedView.intrinsicContentSize
-        let fittingSize = renderedView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
-        AttachmentDebugLogger.record("[Snapshot] rendered layoutMargins=\(layoutMargins) safeInsets=\(renderedInsets) intrinsicSize=\(intrinsicSize) fittingSize=\(fittingSize)")
-        AttachmentDebugLogger.record("[Snapshot] targetSize=\(targetSize) scale=\(scale)")
         let image = makeSnapshotImage(of: renderedView, scale: scale)
+        performOCRDebug(
+            image: image,
+            testName: testName,
+            name: name,
+            filePath: filePath
+        )
         ensureSnapshotArtifactsDirectory(filePath: filePath)
         let failure = verifySnapshot(
-            of: image,
-            as: .image(
-                precision: 1,
-                perceptualPrecision: 1,
-                scale: scale
-            ),
+            of: renderedView,
+            as: .image,
             named: name,
             record: recording,
             fileID: fileID,
@@ -106,7 +95,7 @@ class ViewSnapshotTester {
             )
         }
         AttachmentDebugLogger.record("[TestHarness] snapshot end: \(testName)")
-        attachDebugLogs()
+        attachDebugLogs(testName: testName, name: name)
     }
 
     /// Snapshot error type
@@ -116,8 +105,8 @@ class ViewSnapshotTester {
     
     /// Find actual rendered view 
     private static func findActualRenderedView(in hostingView: UIView) -> UIView? {
-        // Use the hosting view itself to avoid zero-sized subviews during layout.
-        return hostingView
+        // Always render the hosting view, then crop to content bounds.
+        hostingView
     }
 
     private static func makeSnapshotImage(of view: UIView, scale: CGFloat) -> UIImage {
@@ -148,6 +137,95 @@ class ViewSnapshotTester {
         }
         print("Snapshot image missing CGImage. size=\(size) scale=\(scale)")
         return image
+    }
+
+    private static func contentBounds(in rootView: UIView) -> CGRect {
+        var unionRect: CGRect = .null
+        for view in allDescendants(of: rootView) {
+            let size = view.bounds.size
+            guard size.width > 1, size.height > 1 else { continue }
+            let rect = view.convert(view.bounds, to: rootView)
+            unionRect = unionRect.union(rect)
+        }
+        if unionRect.isNull {
+            return .zero
+        }
+        return unionRect.integral
+    }
+
+    private static func allDescendants(of rootView: UIView) -> [UIView] {
+        var result: [UIView] = []
+        var stack: [UIView] = [rootView]
+        while let view = stack.popLast() {
+            if view !== rootView {
+                result.append(view)
+            }
+            stack.append(contentsOf: view.subviews)
+        }
+        return result
+    }
+
+    private static func cropImage(_ image: UIImage, to rect: CGRect) -> UIImage {
+        guard let cgImage = image.cgImage else { return image }
+        let scale = image.scale
+        let pixelRect = CGRect(
+            x: rect.origin.x * scale,
+            y: rect.origin.y * scale,
+            width: rect.size.width * scale,
+            height: rect.size.height * scale
+        ).integral
+        guard let cropped = cgImage.cropping(to: pixelRect) else { return image }
+        return UIImage(cgImage: cropped, scale: scale, orientation: .up)
+    }
+
+    private static func recordIssue(
+        _ message: String,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) {
+        XCTFail(message, file: filePath, line: line)
+    }
+
+    private static func logImageViewDiagnostics(in rootView: UIView) {
+        let imageViews = allDescendants(of: rootView).compactMap { $0 as? UIImageView }
+        let visibleImages = imageViews.filter { view in
+            guard let image = view.image else { return false }
+            let size = view.bounds.size
+            return image.size.width > 0 && image.size.height > 0 && size.width > 1 && size.height > 1
+        }
+        let layeredViews = allDescendants(of: rootView).filter { $0.layer.contents != nil }
+        AttachmentDebugLogger.record("[Snapshot] imageViews total=\(imageViews.count) visible=\(visibleImages.count) layerContents=\(layeredViews.count)")
+        guard !visibleImages.isEmpty else { return }
+        let frames = visibleImages.prefix(32).map { view in
+            view.convert(view.bounds, to: rootView)
+        }
+        let summary = frames.map { "\($0.integral)" }.joined(separator: " | ")
+        AttachmentDebugLogger.record("[Snapshot] imageViewFrames \(summary)")
+
+        let hashes: [String] = visibleImages.compactMap { view in
+            guard let image = view.image else { return nil }
+            return imageHash(for: image)
+        }
+        guard !hashes.isEmpty else { return }
+        let counts = hashes.reduce(into: [String: Int]()) { counts, hash in
+            counts[hash, default: 0] += 1
+        }
+        let uniqueCount = counts.count
+        let maxDup = counts.max(by: { $0.value < $1.value })
+        if let maxDup {
+            AttachmentDebugLogger.record("[Snapshot] imageHashes total=\(hashes.count) unique=\(uniqueCount) maxDup=\(maxDup.value) sample=\(maxDup.key)")
+            if maxDup.value > 1 && uniqueCount == 1 {
+                AttachmentDebugLogger.record("[Snapshot][Heuristic] all images identical (possible stacking or reuse bug)")
+            }
+        }
+    }
+
+    private static func imageHash(for image: UIImage) -> String? {
+        guard let data = image.pngData() ?? image.jpegData(compressionQuality: 1) else { return nil }
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private static func resolvedSize<V: View>(
@@ -217,12 +295,14 @@ class ViewSnapshotTester {
         }
     }
 
-    private static func attachDebugLogs() {
+    private static func attachDebugLogs(testName: String, name: String?) {
         let logs = AttachmentDebugLogger.dump()
         guard !logs.isEmpty else { return }
         print("SWIFTUIHTML_ATTACHMENT_LOGS_BEGIN")
         print(logs)
         print("SWIFTUIHTML_ATTACHMENT_LOGS_END")
+        let logURL = snapshotLogURL(testName: testName, name: name)
+        appendDiagnosticLog(logs, to: logURL)
         let attachment = XCTAttachment(string: logs)
         attachment.name = "SwiftUIHTML Attachment Layout Logs"
         attachment.lifetime = .keepAlways
@@ -230,6 +310,220 @@ class ViewSnapshotTester {
             activity.add(attachment)
         }
         AttachmentDebugLogger.clear()
+    }
+
+    private static func snapshotLogURL(testName: String, name: String?) -> URL {
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+        let filename = "\(safeTestName).\(identifier).log"
+        return diagnosticLogDirectory.appendingPathComponent(filename)
+    }
+
+    private static func appendDiagnosticLog(_ logs: String, to url: URL) {
+        let payload = logs + "\n"
+        do {
+            if !FileManager.default.fileExists(atPath: diagnosticLogDirectory.path) {
+                try FileManager.default.createDirectory(
+                    at: diagnosticLogDirectory,
+                    withIntermediateDirectories: true
+                )
+            }
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try "".write(to: url, atomically: true, encoding: .utf8)
+            }
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
+            if let data = payload.data(using: .utf8) {
+                try handle.write(contentsOf: data)
+            }
+            try handle.close()
+        } catch {
+            print("SWIFTUIHTML_DIAG_WRITE_FAILED: \(error.localizedDescription)")
+        }
+    }
+
+    private static func performOCRDebug(
+        image: UIImage,
+        testName: String,
+        name: String?,
+        filePath: StaticString
+    ) {
+        guard NSClassFromString("XCTestCase") != nil else { return }
+        let shouldOCR = ProcessInfo.processInfo.environment["SWIFTUIHTML_OCR_DEBUG"] != "0"
+        guard shouldOCR else { return }
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+
+        guard let newStats = ocrStats(for: image, label: "new") else { return }
+        AttachmentDebugLogger.record(
+            "[OCR] new textRectCount=\(newStats.count) topPadding=\(newStats.topPadding) bottomPadding=\(newStats.bottomPadding) imageSize=\(newStats.imageSize)"
+        )
+        saveOCROverlay(
+            image: image,
+            rects: newStats.rects,
+            outputDir: "/tmp/swiftuihtml-ocr/ios",
+            filename: "\(safeTestName).\(identifier).ocr.png"
+        )
+
+        if let baselineImage = loadBaselineImage(
+            filePath: filePath,
+            testName: safeTestName,
+            identifier: identifier
+        ), let baselineStats = ocrStats(for: baselineImage, label: "baseline") {
+            let deltaTop = newStats.topPadding - baselineStats.topPadding
+            let deltaBottom = newStats.bottomPadding - baselineStats.bottomPadding
+            AttachmentDebugLogger.record(
+                "[OCR] baseline textRectCount=\(baselineStats.count) topPadding=\(baselineStats.topPadding) bottomPadding=\(baselineStats.bottomPadding) imageSize=\(baselineStats.imageSize) deltaTop=\(deltaTop) deltaBottom=\(deltaBottom)"
+            )
+            saveOCROverlay(
+                image: baselineImage,
+                rects: baselineStats.rects,
+                outputDir: "/tmp/swiftuihtml-ocr/ios-baseline",
+                filename: "\(safeTestName).\(identifier).baseline.ocr.png"
+            )
+        } else {
+            AttachmentDebugLogger.record("[OCR] baseline image missing for \(safeTestName).\(identifier)")
+        }
+    }
+
+    private static func ocrStats(for image: UIImage, label: String) -> OCRStats? {
+        guard let cgImage = image.cgImage else {
+            AttachmentDebugLogger.record("[OCR] missing CGImage (\(label))")
+            return nil
+        }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["en-US", "ja-JP", "ko-KR", "zh-Hans", "zh-Hant"]
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            AttachmentDebugLogger.record("[OCR] request failed \(error.localizedDescription)")
+            return nil
+        }
+
+        let observations = request.results ?? []
+        if observations.isEmpty {
+            return OCRStats(
+                rects: [],
+                topPadding: 0,
+                bottomPadding: 0,
+                imageSize: CGSize(width: cgImage.width, height: cgImage.height)
+            )
+        }
+
+        let imageWidth = CGFloat(cgImage.width)
+        let imageHeight = CGFloat(cgImage.height)
+
+        var rects: [CGRect] = []
+        rects.reserveCapacity(observations.count)
+        for observation in observations {
+            let bbox = observation.boundingBox
+            let rect = CGRect(
+                x: bbox.minX * imageWidth,
+                y: (1 - bbox.maxY) * imageHeight,
+                width: bbox.width * imageWidth,
+                height: bbox.height * imageHeight
+            )
+            rects.append(rect)
+        }
+
+        let minY = rects.map(\.minY).min() ?? 0
+        let maxY = rects.map(\.maxY).max() ?? 0
+        let topPadding = minY
+        let bottomPadding = max(0, imageHeight - maxY)
+        return OCRStats(
+            rects: rects,
+            topPadding: topPadding,
+            bottomPadding: bottomPadding,
+            imageSize: CGSize(width: imageWidth, height: imageHeight)
+        )
+    }
+
+    private static func saveOCROverlay(
+        image: UIImage,
+        rects: [CGRect],
+        outputDir: String,
+        filename: String
+    ) {
+        let overlay = drawOCR(image: image, rects: rects)
+        let outputURL = URL(fileURLWithPath: outputDir, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+        } catch {
+            AttachmentDebugLogger.record("[OCR] create dir failed \(error.localizedDescription)")
+        }
+        let fileURL = outputURL.appendingPathComponent(filename)
+        if let data = overlay.pngData() {
+            do {
+                try data.write(to: fileURL)
+                AttachmentDebugLogger.record("[OCR] overlay saved \(fileURL.path)")
+            } catch {
+                AttachmentDebugLogger.record("[OCR] write failed \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private static func drawOCR(image: UIImage, rects: [CGRect]) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+        return renderer.image { ctx in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+            ctx.cgContext.setStrokeColor(UIColor.red.withAlphaComponent(0.7).cgColor)
+            ctx.cgContext.setLineWidth(2.0)
+            for rect in rects {
+                let scaledRect = CGRect(
+                    x: rect.minX / image.scale,
+                    y: rect.minY / image.scale,
+                    width: rect.width / image.scale,
+                    height: rect.height / image.scale
+                )
+                ctx.cgContext.stroke(scaledRect)
+            }
+        }
+    }
+
+    private static func sanitizePathComponent(_ string: String) -> String {
+        let sanitized = string.replacingOccurrences(
+            of: "\\W+",
+            with: "-",
+            options: .regularExpression
+        )
+        return sanitized.replacingOccurrences(
+            of: "^-|-$",
+            with: "",
+            options: .regularExpression
+        )
+    }
+
+    private static func loadBaselineImage(
+        filePath: StaticString,
+        testName: String,
+        identifier: String
+    ) -> UIImage? {
+        let url = URL(fileURLWithPath: "\(filePath)", isDirectory: false)
+        let testsDir = url.deletingLastPathComponent()
+        let snapshotDir = testsDir
+            .appendingPathComponent("__Snapshots__")
+            .appendingPathComponent("HTMLBasicTests")
+        let fileURL = snapshotDir
+            .appendingPathComponent("\(testName).\(identifier)")
+            .appendingPathExtension("png")
+        return UIImage(contentsOfFile: fileURL.path)
+    }
+
+    private struct OCRStats {
+        let rects: [CGRect]
+        let topPadding: CGFloat
+        let bottomPadding: CGFloat
+        let imageSize: CGSize
+
+        var count: Int { rects.count }
     }
 }
 #endif

@@ -1,6 +1,9 @@
 //  Copyright © 2025 PRND. All rights reserved.
 import Foundation
 import CoreText
+#if os(macOS)
+import AppKit
+#endif
 
 /// Calculates frame rectangles for text ranges using Core Text
 final class TextRangeFrameCalculator {
@@ -91,6 +94,36 @@ final class TextRangeFrameCalculator {
             targetRanges: ranges
         )
     }
+
+#if os(macOS)
+    func measureLayoutWithTextKit(
+        attributedString: NSAttributedString,
+        in containerSize: CGSize,
+        by ranges: [NSRange]
+    ) -> [CGRect] {
+        let textStorage = NSTextStorage(attributedString: attributedString)
+        let layoutManager = NSLayoutManager()
+        let textContainer = NSTextContainer(size: containerSize)
+        textContainer.lineFragmentPadding = 0
+        textContainer.widthTracksTextView = false
+        textContainer.heightTracksTextView = false
+        layoutManager.addTextContainer(textContainer)
+        textStorage.addLayoutManager(layoutManager)
+        layoutManager.ensureLayout(for: textContainer)
+
+        var rects: [CGRect] = []
+        rects.reserveCapacity(ranges.count)
+        for range in ranges {
+            let glyphRange = layoutManager.glyphRange(
+                forCharacterRange: range,
+                actualCharacterRange: nil
+            )
+            let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+            rects.append(rect)
+        }
+        return rects
+    }
+#endif
 }
 
 // MARK: - Private Methods

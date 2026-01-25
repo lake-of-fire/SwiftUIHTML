@@ -42,6 +42,7 @@ public struct HTMLView: View, Equatable {
                 intervalState = Self.signposter.beginInterval("HTML parse", id: signpostID, "\(html.count) chars")
             }
 #endif
+            AttachmentIDGenerator.reset()
             parsedNode = parser().parse(html: html)
 #if canImport(os)
             if let intervalState {

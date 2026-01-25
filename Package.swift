@@ -14,10 +14,15 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-testing.git", from: "6.2.3"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", branch: "master"),
+        .package(url: "https://github.com/kean/Nuke.git", branch: "main"),
     ],
     targets: [
         .target(
-            name: "SwiftUIHTML", dependencies: []),
+            name: "SwiftUIHTML",
+            dependencies: [
+                .product(name: "NukeUI", package: "Nuke"),
+            ]
+        ),
         .testTarget(
             name: "SwiftUIHTMLTests",
             dependencies: [

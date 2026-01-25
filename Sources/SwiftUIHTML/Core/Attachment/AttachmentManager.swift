@@ -45,9 +45,7 @@ final class AttachmentManager: ObservableObject {
 
     func setAttachmentSize(key: AnyHashable, size: CGSize, styleContainer: HTMLStyleContainer) {
         layoutEngine.setSize(key: key, size: size)
-        //NOTE: lineSpacing 각각 다를 수 있음
-        layoutEngine.lineSpacing = styleContainer.textLine?.lineSpacing ?? 0
-        log("setAttachmentSize key=\(key) size=\(size) lineSpacing=\(layoutEngine.lineSpacing)")
+        log("setAttachmentSize key=\(key) size=\(size)")
     }
 
     func offset(key: AnyHashable) -> CGSize {

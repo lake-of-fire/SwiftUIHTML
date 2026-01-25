@@ -37,7 +37,6 @@ extension Collection where Element == InlineElement {
         var results: [TextType] = []
         results.reserveCapacity(count)
         var textCount = 0
-        var attachmentCount = 0
 
         for element in self {
             switch element.type {
@@ -45,8 +44,7 @@ extension Collection where Element == InlineElement {
                 defer { textCount += 1 }
                 results.append(element.toHTMLTextType(id: textCount))
             case .attachment:
-                defer { attachmentCount += 1 }
-                results.append(element.toHTMLTextType(id: attachmentCount))
+                results.append(element.toHTMLTextType(id: AttachmentIDGenerator.next()))
             }
         }
         return results

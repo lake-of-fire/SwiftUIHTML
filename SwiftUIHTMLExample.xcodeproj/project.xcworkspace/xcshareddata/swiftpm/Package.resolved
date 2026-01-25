@@ -1,5 +1,5 @@
 {
-  "originHash" : "877a82bf992e98fa11e61d7d05c9ce59144ea67c2e5f8a5a7447b25211cdfa6b",
+  "originHash" : "792bad491dc3179f69018e19f47448e6187fbae2dd47a0e4783a58e8df506e7e",
   "pins" : [
     {
       "identity" : "fuzi",
@@ -8,6 +8,15 @@
       "state" : {
         "branch" : "rename-to-parse-from-init",
         "revision" : "4092585ab3eea9de6c2a92024d3ab5ec3bfc4785"
+      }
+    },
+    {
+      "identity" : "nuke",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kean/Nuke.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "88849b71eda654a2f4326801d96cc3b01d0d7efa"
       }
     },
     {

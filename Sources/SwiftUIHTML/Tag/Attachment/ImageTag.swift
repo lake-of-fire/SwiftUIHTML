@@ -1,5 +1,6 @@
 //  Copyright © 2024 PRND. All rights reserved.
 import SwiftUI
+import NukeUI
 
 
 struct ImageTag: InlineAttachmentTag {
@@ -10,14 +11,41 @@ struct ImageTag: InlineAttachmentTag {
     }
     var body: some View {
         let size = ElementSize(attributes: attributes)
-        AsyncImage(url: attributes["src"]?.url) { phase in
-            switch phase {
-            case .success(let image):
+        let url = attributes["src"]?.url
+        LazyImage(url: url, transaction: Transaction(animation: nil)) { state in
+            if let image = state.image {
                 ImageContainer(image: image, size: size)
-            default:
+                    .onAppear {
+                        recordImageEvent("success", size: size)
+                    }
+            } else if state.error != nil {
                 ImagePlaceholder(size: size)
+                    .onAppear {
+                        recordImageEvent("failure", size: size)
+                    }
+            } else {
+                ImagePlaceholder(size: size)
+                    .onAppear {
+                        recordImageEvent("empty", size: size)
+                    }
             }
         }
+        .onStart { _ in
+            ImageLoadTracker.shared.begin(url: url)
+        }
+        .onCompletion { _ in
+            ImageLoadTracker.shared.end(url: url)
+        }
+    }
+
+    private func recordImageEvent(_ state: String, size: ElementSize) {
+        let src = attributes["src"]?.string ?? "-"
+        let width = attributes["width"]?.string ?? "-"
+        let height = attributes["height"]?.string ?? "-"
+        AttachmentDebugLogger.recordOnce(
+            "ImageTag:\(state):\(src)",
+            message: "[ImageTag] \(state) src=\(src) width=\(width) height=\(height) resolvedWidth=\(String(describing: size.width)) resolvedHeight=\(String(describing: size.height))"
+        )
     }
 }
 

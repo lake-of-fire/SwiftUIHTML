@@ -24,6 +24,7 @@ struct HTMLTextLayout: View {
         self.attachmentTexts = texts.filter(\.hasAttachment)
         self.attachmentManager = attachmentManager
         attachmentManager.setTexts(texts)
+        logAttachmentDiagnostics()
     }
 
     var body: some View {
@@ -95,6 +96,37 @@ struct HTMLTextLayout: View {
         }
     }
 
+    private func logAttachmentDiagnostics() {
+        guard shouldLog else { return }
+        let total = attachmentTexts.count
+        let unique = Set(attachmentTexts).count
+        log("attachmentCount total=\(total) unique=\(unique)")
+        guard unique != total else { return }
+        var counts: [String: Int] = [:]
+        counts.reserveCapacity(total)
+        for text in attachmentTexts {
+            let key = attachmentSummary(for: text)
+            counts[key, default: 0] += 1
+        }
+        let duplicates = counts
+            .filter { $0.value > 1 }
+            .sorted { $0.value > $1.value }
+            .map { "\($0.key)x\($0.value)" }
+        if !duplicates.isEmpty {
+            log("attachmentDuplicates \(duplicates.joined(separator: " | "))")
+        }
+    }
+
+    private func attachmentSummary(for text: TextType) -> String {
+        guard let info = attachmentDebugInfo(for: text) else {
+            return "unknown"
+        }
+        let src = info.attributes["src"]?.string ?? "-"
+        let width = info.attributes["width"]?.string ?? "-"
+        let height = info.attributes["height"]?.string ?? "-"
+        return "id=\(info.id) tag=\(info.tag) src=\(src) w=\(width) h=\(height)"
+    }
+
     private func log(_ message: @autoclosure () -> String) {
         guard shouldLog else { return }
         let rendered = message()
@@ -111,8 +143,13 @@ struct HTMLTextLayout: View {
     private func logAttachmentSize(text: TextType, size: CGSize) {
         guard shouldLog else { return }
         if let info = attachmentDebugInfo(for: text) {
-            let keys = info.attributes.keys.sorted()
-            log("attachmentSize id=\(info.id) tag=\(info.tag) size=\(size) attrs=\(keys)")
+            let alt = info.attributes["alt"]?.string ?? "-"
+            let src = info.attributes["src"]?.string ?? "-"
+            let width = info.attributes["width"]?.string ?? "-"
+            let height = info.attributes["height"]?.string ?? "-"
+            log(
+                "attachmentSize id=\(info.id) tag=\(info.tag) size=\(size) alt=\(alt) src=\(src) w=\(width) h=\(height)"
+            )
         } else {
             log("attachmentSize size=\(size)")
         }
@@ -121,8 +158,13 @@ struct HTMLTextLayout: View {
     private func logAttachmentFrame(text: TextType, frame: CGRect, offset: CGSize) {
         guard shouldLog else { return }
         if let info = attachmentDebugInfo(for: text) {
-            let keys = info.attributes.keys.sorted()
-            log("attachmentFrame id=\(info.id) tag=\(info.tag) frame=\(frame) offset=\(offset) attrs=\(keys)")
+            let alt = info.attributes["alt"]?.string ?? "-"
+            let src = info.attributes["src"]?.string ?? "-"
+            let width = info.attributes["width"]?.string ?? "-"
+            let height = info.attributes["height"]?.string ?? "-"
+            log(
+                "attachmentFrame id=\(info.id) tag=\(info.tag) frame=\(frame) offset=\(offset) alt=\(alt) src=\(src) w=\(width) h=\(height)"
+            )
         } else {
             log("attachmentFrame frame=\(frame) offset=\(offset)")
         }

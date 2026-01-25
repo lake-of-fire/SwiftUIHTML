@@ -76,11 +76,17 @@ struct HTMLInline: View {
                     ))
                     
                 case let .attachment(_, _, _, styleContainer):
-                    return result + (
-                        Text(
-                            attachmentImage(for: type, styleContainer: styleContainer)
-                        ).font(.system(size: 1))
+                    let imageText = Text(
+                        attachmentImage(for: type, styleContainer: styleContainer)
                     )
+#if os(macOS)
+                    if let font = styleContainer.uiFont {
+                        return result + imageText.font(.custom(font.fontName, size: font.pointSize))
+                    }
+                    return result + imageText
+#else
+                    return result + imageText.font(.system(size: 1))
+#endif
                 }
             }
     }
