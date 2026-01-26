@@ -10,10 +10,10 @@
 		261846002DBF67F7001739B1 /* Fuzi in Frameworks */ = {isa = PBXBuildFile; productRef = 261845FF2DBF67F7001739B1 /* Fuzi */; };
 		261CAB2B2DBB7BBF0015BD7E /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */; };
 		261CAB2E2DBB7BCF0015BD7E /* Fuzi in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2D2DBB7BCF0015BD7E /* Fuzi */; };
-		27585C06A5564924A5E83908 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF132DC1E8F600024B85 /* SwiftUIHTML */; };
-		2FFF49397FD849E7A06FC80A /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */; };
 		26F6EF122DC1E8E400024B85 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF112DC1E8E400024B85 /* SwiftUIHTML */; };
 		26F6EF142DC1E8F600024B85 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF132DC1E8F600024B85 /* SwiftUIHTML */; };
+		27585C06A5564924A5E83908 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF132DC1E8F600024B85 /* SwiftUIHTML */; };
+		2FFF49397FD849E7A06FC80A /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */; };
 		48D828A9F4CE40D88A69C059 /* Fuzi in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2D2DBB7BCF0015BD7E /* Fuzi */; };
 /* End PBXBuildFile section */
 
@@ -28,9 +28,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		02EE68CE6E9340E5B60E57CF /* SwiftUIHTMLExampleMacOS.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = SwiftUIHTMLExampleMacOS.xctestplan; sourceTree = "<group>"; };
 		261CA9C22DBB7ADD0015BD7E /* SwiftUIHTMLExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftUIHTMLExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		261CAB1C2DBB7B840015BD7E /* SwiftUIHTMLExampleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwiftUIHTMLExampleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		02EE68CE6E9340E5B60E57CF /* SwiftUIHTMLExampleMacOS.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = SwiftUIHTMLExampleMacOS.xctestplan; sourceTree = "<group>"; };
 		269A4B682DC1F79200E54076 /* SwiftUIHTMLExample.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = SwiftUIHTMLExample.xctestplan; sourceTree = "<group>"; };
 		26FC51D22DCB43E3005B4BD3 /* SwiftUIHTMLExample-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "SwiftUIHTMLExample-Info.plist"; sourceTree = "<group>"; };
 		E5E45B1DB81A46819201D9EB /* SwiftUIHTMLExampleMacOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwiftUIHTMLExampleMacOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -431,7 +431,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Example/Preview Content\"";
-				DEVELOPMENT_TEAM = ZLQVH78B5Q;
+				DEVELOPMENT_TEAM = 8Y769YTXHF;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -472,7 +472,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Example/Preview Content\"";
-				DEVELOPMENT_TEAM = ZLQVH78B5Q;
+				DEVELOPMENT_TEAM = 8Y769YTXHF;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
