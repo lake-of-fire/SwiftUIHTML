@@ -184,6 +184,7 @@ border-radius: 4px 8px 12px 16px;
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Box Model")
         .applyInlineNavigationTitleDisplayMode()

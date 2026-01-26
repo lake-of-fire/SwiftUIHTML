@@ -195,6 +195,7 @@ struct ComplexHTMLSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Complex HTML")
         .applyInlineNavigationTitleDisplayMode()

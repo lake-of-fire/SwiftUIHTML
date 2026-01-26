@@ -277,9 +277,14 @@ private extension TextRangeFrameCalculator {
 
             // Create rect for each character range
             for charFrame in characterRects {
+#if os(macOS)
+                let yOrigin = lineOrigin.y + charFrame.origin.y
+#else
+                let yOrigin = lineOrigin.y
+#endif
                 let lineRect = CGRect(
                     x: charFrame.origin.x + lineOrigin.x,
-                    y: lineOrigin.y,
+                    y: yOrigin,
                     width: charFrame.size.width,
                     height: charFrame.size.height
                 )
@@ -348,9 +353,14 @@ private extension TextRangeFrameCalculator {
             )
 
             for charFrame in characterRects {
+#if os(macOS)
+                let yOrigin = lineOrigin.y + charFrame.origin.y
+#else
+                let yOrigin = lineOrigin.y
+#endif
                 let lineRect = CGRect(
                     x: charFrame.origin.x + lineOrigin.x,
-                    y: lineOrigin.y,
+                    y: yOrigin,
                     width: charFrame.size.width,
                     height: charFrame.size.height
                 )

@@ -128,6 +128,7 @@ struct RichContentSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Rich Content")
         .applyInlineNavigationTitleDisplayMode()

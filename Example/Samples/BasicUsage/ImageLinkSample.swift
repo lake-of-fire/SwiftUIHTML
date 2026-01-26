@@ -184,6 +184,7 @@ struct ImageLinkSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Images & Links")
         .applyInlineNavigationTitleDisplayMode()

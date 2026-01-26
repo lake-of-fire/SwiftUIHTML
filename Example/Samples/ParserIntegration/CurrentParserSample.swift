@@ -112,6 +112,7 @@ struct HTMLFuziParser: HTMLParserable {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Current Parser")
         .applyInlineNavigationTitleDisplayMode()

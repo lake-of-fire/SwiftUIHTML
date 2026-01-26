@@ -17,8 +17,10 @@ public struct HTMLBlock: View {
     }
 
     public var body: some View {
-        ForEach(groupContents(contents: element.contents).indicesCollection, id: \.0) { _, groupContent in
-            renderContent(groupContent)
+        VStack(alignment: .leading, spacing: .zero) {
+            ForEach(groupContents(contents: element.contents).indicesCollection, id: \.0) { _, groupContent in
+                renderContent(groupContent)
+            }
         }
     }
 }

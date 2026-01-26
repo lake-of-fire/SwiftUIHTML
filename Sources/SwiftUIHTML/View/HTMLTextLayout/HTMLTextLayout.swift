@@ -13,6 +13,8 @@ struct HTMLTextLayout: View {
     private var shouldLog: Bool {
         ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_LOGS"] == "1"
             || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
             || NSClassFromString("XCTestCase") != nil
     }
 #if canImport(os)
@@ -49,6 +51,9 @@ struct HTMLTextLayout: View {
             info.view
                 .modifier(LinkModifier(link: info.link))
                 .offset(offset)
+                .onAppear {
+                    logAttachmentLayoutSummary(text: text, offset: offset)
+                }
                 .background(attachmentFrameReader(for: text, offset: offset))
                 .background(attachmentSizeReader(for: text, styleContainer: info.styleContainer))
         }
@@ -168,5 +173,14 @@ struct HTMLTextLayout: View {
         } else {
             log("attachmentFrame frame=\(frame) offset=\(offset)")
         }
+    }
+
+    private func logAttachmentLayoutSummary(text: TextType, offset: CGSize) {
+        guard shouldLog else { return }
+        guard let info = attachmentDebugInfo(for: text) else { return }
+        let src = info.attributes["src"]?.string ?? "-"
+        let width = info.attributes["width"]?.string ?? "-"
+        let height = info.attributes["height"]?.string ?? "-"
+        log("attachmentLayout id=\(info.id) tag=\(info.tag) src=\(src) w=\(width) h=\(height) offset=\(offset)")
     }
 }

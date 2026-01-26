@@ -46,7 +46,7 @@ private struct HTMLSwiftSoupParser: HTMLParserable {
     }
 
     private func elementToHTMLNode(element: SwiftSoup.Element) throws -> HTMLNode {
-        let tag = element.tagName()
+        let tag = element.tagName().lowercased()
         let attributes = element.getAttributes()?.reduce(into: [String: String]()) { result, attribute in
             result[attribute.getKey()] = attribute.getValue()
         } ?? [:]

@@ -62,10 +62,12 @@ private extension RubyTag {
     }
 
     var baseFont: PlatformFont? {
-        if let fontName = attributes["ruby-font-name"]?.string,
-           let size = attributes["ruby-font-size"]?.cgFloat,
-           let font = PlatformFont(name: fontName, size: size) {
-            return font
+        if let size = attributes["ruby-font-size"]?.cgFloat {
+            if let fontName = attributes["ruby-font-name"]?.string,
+               let font = PlatformFont(name: fontName, size: size) {
+                return font
+            }
+            return PlatformFont.systemFont(ofSize: size)
         }
 
         let cssStyle = attributes["style"]?.cssStyle ?? .empty
@@ -79,16 +81,18 @@ private extension RubyTag {
             return PlatformFont.systemFont(ofSize: resolvedSize)
         }
 
-        return nil
+        return PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)
     }
 
     var rubyFont: PlatformFont? {
-        if let fontName = attributes["ruby-annotation-font-name"]?.string,
-           let size = attributes["ruby-annotation-font-size"]?.cgFloat,
-           let font = PlatformFont(name: fontName, size: size) {
-            return font
+        if let size = attributes["ruby-annotation-font-size"]?.cgFloat {
+            if let fontName = attributes["ruby-annotation-font-name"]?.string,
+               let font = PlatformFont(name: fontName, size: size) {
+                return font
+            }
+            return PlatformFont.systemFont(ofSize: size)
         }
-        return baseFont
+        return baseFont ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize * rubyScale)
     }
 }
 
@@ -113,6 +117,7 @@ private struct RubyInlineLabel: View {
         let base = baseText.isEmpty ? rubyText : baseText
         guard !base.isEmpty else { return NSAttributedString(string: "") }
         guard !rubyText.isEmpty else {
+            logRubyDiagnostics(base: base, ruby: rubyText)
             return NSAttributedString(string: base, attributes: baseAttributes)
         }
 
@@ -134,6 +139,7 @@ private struct RubyInlineLabel: View {
 
         var attributes = baseAttributes
         attributes[kCTRubyAnnotationAttributeName as NSAttributedString.Key] = annotation
+        logRubyDiagnostics(base: base, ruby: rubyText)
         return NSAttributedString(string: base, attributes: attributes)
     }
 
@@ -150,6 +156,36 @@ private struct RubyInlineLabel: View {
 #endif
         }
         return attributes
+    }
+
+    private func logRubyDiagnostics(base: String, ruby: String) {
+        let baseFontName = font?.fontName ?? "nil"
+        let baseFontSize = font.map { "\($0.pointSize)" } ?? "nil"
+        let rubyFontName = rubyFont?.fontName ?? "nil"
+        let rubyFontSize = rubyFont.map { "\($0.pointSize)" } ?? "nil"
+        let color = resolvedForegroundColor() ?? "nil"
+        let key = "ruby-\(base)-\(ruby)-\(rubyPosition.rawValue)-\(rubyScale)-\(baseFontName)-\(rubyFontName)"
+        AttachmentDebugLogger.recordOnce(
+            key,
+            message: "[Ruby] base='\(base)' ruby='\(ruby)' position=\(rubyPosition) scale=\(rubyScale) baseFont=\(baseFontName)@\(baseFontSize) rubyFont=\(rubyFontName)@\(rubyFontSize) color=\(color)"
+        )
+    }
+
+    private func resolvedForegroundColor() -> String? {
+        guard let foregroundColor else { return nil }
+#if os(macOS)
+        let nsColor = NSColor(foregroundColor)
+        guard let rgb = nsColor.usingColorSpace(.sRGB) else { return nil }
+        return String(format: "rgba(%.3f,%.3f,%.3f,%.3f)", rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent)
+#else
+        let uiColor = UIColor(foregroundColor)
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        guard uiColor.getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        return String(format: "rgba(%.3f,%.3f,%.3f,%.3f)", r, g, b, a)
+#endif
     }
 }
 

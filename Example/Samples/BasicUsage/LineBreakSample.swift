@@ -211,6 +211,7 @@ struct LineBreakSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Line Break Modes")
         .applyInlineNavigationTitleDisplayMode()

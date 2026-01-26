@@ -178,6 +178,7 @@ font-family: 'Times New Roman';
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Font Families")
         .applyInlineNavigationTitleDisplayMode()

@@ -46,6 +46,8 @@ final class AttachmentLayoutEngine {
     private var shouldLog: Bool {
         ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_LOGS"] == "1"
             || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
             || NSClassFromString("XCTestCase") != nil
     }
 
@@ -105,8 +107,13 @@ final class AttachmentLayoutEngine {
         let point = rect?.origin ?? .zero
         guard let textAttachment = keyAttachment[key] else { return point }
         if ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1" {
-            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) textKit=on")
-            return point
+            let lineHeightOverride = rect?.height ?? 0
+            let adjusted = textAttachment.value?.getAdjustedOffset(
+                point: point,
+                lineHeightOverride: lineHeightOverride > 0 ? lineHeightOverride : nil
+            ) ?? point
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted) textKit=on")
+            return adjusted
         }
         let lineHeightOverride = rect?.height ?? 0
         let adjusted = textAttachment.value?.getAdjustedOffset(
@@ -168,12 +175,40 @@ final class AttachmentLayoutEngine {
                 .eraseToAnyPublisher()
         }
         logAttachmentCounts(expected: texts.filter(\.hasAttachment).count)
+        applyFallbackAttachmentSizesIfNeeded()
     }
 
 
 }
 
 private extension AttachmentLayoutEngine {
+    func applyFallbackAttachmentSizesIfNeeded() {
+        guard !attachmentKeys.isEmpty else { return }
+        var applied = 0
+        for key in attachmentKeys {
+            let existing = getSize(key: key)
+            if existing != .zero {
+                continue
+            }
+            guard let textType = key.base as? TextType else { continue }
+            guard case let .attachment(_, _, attributes, styleContainer) = textType else { continue }
+            let elementSize = ElementSize(attributes: attributes)
+            guard let width = elementSize.width ?? elementSize.height,
+                  let height = elementSize.height ?? elementSize.width else {
+                continue
+            }
+            let size = CGSize(width: max(1, width), height: max(1, height))
+            setSize(key: key, size: size)
+            if let spacing = styleContainer.textLine?.lineSpacing {
+                lineSpacing = spacing
+            }
+            applied += 1
+        }
+        if applied > 0 {
+            log("fallbackAttachmentSizes applied=\(applied)")
+        }
+    }
+
     func resolveLineSpacing(texts: [TextType]) -> CGFloat {
         var maxLineSpacing: CGFloat = 0
         for text in texts {
@@ -369,6 +404,7 @@ private extension AttachmentLayoutEngine {
         frameStore[key] = bounds
         let container = containerSize ?? .zero
         log("storeRangeBounds key=\(key) bounds=\(bounds) container=\(container)")
+        logMissingAttachmentsIfNeeded()
         notifyLayoutUpdate()
     }
 
@@ -383,6 +419,8 @@ private extension AttachmentLayoutEngine {
         if didChange {
             let container = containerSize ?? .zero
             log("storeRangeBounds batch count=\(values.count) container=\(container)")
+            logLayoutFramesIfNeeded(values: values, container: container)
+            logMissingAttachmentsIfNeeded()
             notifyLayoutUpdate()
         }
     }
@@ -392,6 +430,49 @@ private extension AttachmentLayoutEngine {
         Task {
             await AttachmentLayoutTracker.shared.markUpdated()
         }
+    }
+}
+
+private extension AttachmentLayoutEngine {
+    func logLayoutFramesIfNeeded(values: [(key: AnyHashable, bounds: CGRect)], container: CGSize) {
+        guard shouldLog else { return }
+        guard !values.isEmpty else { return }
+        let sample = values.prefix(6).map { entry in
+            "\(summary(for: entry.key)) frame=\(entry.bounds)"
+        }
+        log("layoutFrames sample=\(sample.joined(separator: " | ")) container=\(container)")
+    }
+
+    func summary(for key: AnyHashable) -> String {
+        guard let textType = key.base as? TextType else {
+            return "key=\(key)"
+        }
+        switch textType {
+        case let .attachment(id, tag, attributes, _):
+            let src = attributes["src"]?.string ?? "-"
+            let width = attributes["width"]?.string ?? "-"
+            let height = attributes["height"]?.string ?? "-"
+            return "id=\(id) tag=\(tag) src=\(src) w=\(width) h=\(height)"
+        case let .text(string, _):
+            return "text=\(string.prefix(12))"
+        case .newLine:
+            return "newline"
+        }
+    }
+
+    func logMissingAttachmentsIfNeeded() {
+        guard shouldLog else { return }
+        guard !attachmentKeys.isEmpty else { return }
+        let expected = Set(attachmentKeys)
+        let present = Set(frameStore.keys)
+        guard expected.count > present.count else { return }
+        let missing = expected.subtracting(present)
+        guard !missing.isEmpty else { return }
+        let sample = missing.prefix(3).map { "\($0)" }.joined(separator: ", ")
+        AttachmentDebugLogger.recordOnce(
+            "missing-attachments-\(expected.count)-\(present.count)",
+            message: "[AttachmentLayout] missing attachment frames expected=\(expected.count) present=\(present.count) sample=\(sample)"
+        )
     }
 }
 

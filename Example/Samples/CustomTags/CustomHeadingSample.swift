@@ -117,6 +117,7 @@ let configuration = HTMLConfiguration.default
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Custom Headings")
         .applyInlineNavigationTitleDisplayMode()

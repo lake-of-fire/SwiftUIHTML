@@ -110,6 +110,22 @@ def image_metrics(path):
             dark_ratio = 1.0 - float(dark_out.split()[0])
         except ValueError:
             dark_ratio = None
+    nonwhite_out = run_magick([
+        str(path),
+        "-colorspace",
+        "Gray",
+        "-threshold",
+        "99%",
+        "-format",
+        "%[fx:mean]",
+        "info:",
+    ])
+    nonwhite_ratio = None
+    if nonwhite_out:
+        try:
+            nonwhite_ratio = 1.0 - float(nonwhite_out.split()[0])
+        except ValueError:
+            nonwhite_ratio = None
     edge_out = run_magick([
         str(path),
         "-colorspace",
@@ -133,6 +149,7 @@ def image_metrics(path):
         "saturation": saturation,
         "luminance": luminance,
         "dark_ratio": dark_ratio,
+        "nonwhite_ratio": nonwhite_ratio,
         "edge_mean": edge_mean,
     }
 
@@ -151,12 +168,16 @@ def heuristic_flags(base, new):
     new_dark = new.get("dark_ratio")
     base_edge = base.get("edge_mean")
     new_edge = new.get("edge_mean")
+    base_nonwhite = base.get("nonwhite_ratio")
+    new_nonwhite = new.get("nonwhite_ratio")
     if base_unique and new_unique and base_unique > 2000 and new_unique < base_unique * 0.5:
         flags.append("low color variety vs baseline")
     if base_sat is not None and new_sat is not None and base_sat > 0.02 and new_sat < base_sat * 0.6:
         flags.append("low saturation vs baseline")
     if base_lum is not None and new_lum is not None and base_lum < 0.98 and new_lum > base_lum + 0.02:
         flags.append("brighter vs baseline")
+    if base_nonwhite is not None and new_nonwhite is not None and base_nonwhite > 0.02 and new_nonwhite < base_nonwhite * 0.6:
+        flags.append("low nonwhite coverage vs baseline")
     if base_dark is not None and new_dark is not None and base_dark > 0.02 and new_dark < base_dark * 0.6:
         flags.append("low ink coverage vs baseline")
     if base_edge is not None and new_edge is not None and base_edge > 0.01 and new_edge < base_edge * 0.6:
@@ -173,14 +194,16 @@ def format_metrics(metrics):
     sat = metrics.get("saturation")
     lum = metrics.get("luminance")
     dark = metrics.get("dark_ratio")
+    nonwhite = metrics.get("nonwhite_ratio")
     edge = metrics.get("edge_mean")
     sat_str = "n/a" if sat is None else f"{sat:.4f}"
     lum_str = "n/a" if lum is None else f"{lum:.4f}"
     dark_str = "n/a" if dark is None else f"{dark:.4f}"
+    nonwhite_str = "n/a" if nonwhite is None else f"{nonwhite:.4f}"
     edge_str = "n/a" if edge is None else f"{edge:.4f}"
     return (
         f"{width}x{height} px, unique={unique}, sat={sat_str}, lum={lum_str}, "
-        f"dark={dark_str}, edge={edge_str}"
+        f"dark={dark_str}, nonwhite={nonwhite_str}, edge={edge_str}"
     )
 
 
@@ -210,9 +233,21 @@ img { width: 100%; height: auto; border: 1px solid #eee; background: #fff; }
 .missing { color: #b00020; font-size: 12px; }
 .metrics { font-size: 11px; color: #666; margin-top: 6px; }
 .flag { color: #b00020; font-size: 12px; font-weight: 600; margin-top: 6px; }
+.toggle { margin-top: 8px; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; }
+.html-block { display: none; margin-top: 10px; background: #0f0f0f; color: #e8e8e8; padding: 12px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
 """
 
-    parts = ["<!doctype html>", "<html><head><meta charset='utf-8'>", f"<style>{css}</style>", "</head><body>"]
+    script = """
+<script>
+function toggleHtml(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = (el.style.display === "block") ? "none" : "block";
+}
+</script>
+"""
+
+    parts = ["<!doctype html>", "<html><head><meta charset='utf-8'>", f"<style>{css}</style>", script, "</head><body>"]
     parts.append(
         f"<div class='header'><h2>{html.escape(title)}</h2><div>Artifacts: {html.escape(str(artifacts_dir))}</div></div>"
     )
@@ -264,6 +299,19 @@ img { width: 100%; height: auto; border: 1px solid #eee; background: #fff; }
         else:
             parts.append("<div class='missing'>Diff unavailable</div>")
         parts.append("</div>")
+
+        html_path = artifact.with_suffix(".html")
+        if not html_path.exists():
+            html_path = baseline.with_suffix(".html")
+        html_id = f"html-{group.replace('/', '_')}-{name}"
+        try:
+            html_payload = html_path.read_text(encoding="utf-8") if html_path.exists() else ""
+        except OSError:
+            html_payload = ""
+        if not html_payload:
+            html_payload = "No HTML input captured for this snapshot."
+        parts.append(f"<button class='toggle' onclick=\"toggleHtml('{html_id}')\">Toggle HTML input</button>")
+        parts.append(f"<pre id='{html_id}' class='html-block'>{html.escape(html_payload)}</pre>")
 
         parts.append("</div>")
 

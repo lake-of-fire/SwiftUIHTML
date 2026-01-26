@@ -140,6 +140,7 @@ struct CSSColorSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("CSS Colors")
         .applyInlineNavigationTitleDisplayMode()

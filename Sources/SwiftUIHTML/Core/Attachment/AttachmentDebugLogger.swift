@@ -4,8 +4,17 @@ import Foundation
 enum AttachmentDebugLogger {
     private static nonisolated(unsafe) let lock = NSLock()
     private static nonisolated(unsafe) var buffer: [String] = []
-    private static let logFileURL = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("swiftuihtml-attachment.log")
+    private static let logFileURL: URL = {
+        let env = ProcessInfo.processInfo.environment
+        if let customPath = env["SWIFTUIHTML_ATTACHMENT_LOG_PATH"], !customPath.isEmpty {
+            return URL(fileURLWithPath: customPath)
+        }
+        if env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil {
+            return URL(fileURLWithPath: "/tmp/swiftuihtml-attachment.log")
+        }
+        return URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("swiftuihtml-attachment.log")
+    }()
 
     static func record(_ message: String) {
         lock.lock()
@@ -53,7 +62,13 @@ enum AttachmentDebugLogger {
     static func clear() {
         lock.lock()
         buffer.removeAll(keepingCapacity: true)
-        try? FileManager.default.removeItem(at: logFileURL)
+        let env = ProcessInfo.processInfo.environment
+        let shouldPreserveLog = env["SWIFTUIHTML_ATTACHMENT_LOG_PRESERVE"] == "1"
+            || env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestBundlePath"] != nil
+        if !shouldPreserveLog {
+            try? FileManager.default.removeItem(at: logFileURL)
+        }
         lock.unlock()
     }
 }

@@ -48,6 +48,7 @@ struct SyntheticStressSample: View {
                     .cornerRadius(8)
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Synthetic Stress")
         .applyInlineNavigationTitleDisplayMode()

@@ -60,6 +60,7 @@ struct RubyTagSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Ruby Tags")
         .applyInlineNavigationTitleDisplayMode()

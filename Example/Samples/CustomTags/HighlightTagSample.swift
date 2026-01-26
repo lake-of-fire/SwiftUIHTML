@@ -198,6 +198,7 @@ let configuration = HTMLConfiguration.default
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Highlight Tag")
         .applyInlineNavigationTitleDisplayMode()

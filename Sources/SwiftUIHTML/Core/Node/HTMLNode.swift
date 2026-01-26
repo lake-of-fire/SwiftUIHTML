@@ -12,6 +12,14 @@ public struct HTMLNode: Equatable, Sendable {
         self.attributes = attributes.mapValues { AttributeValue(rawValue: $0) }
         self.children = children
     }
+
+    public var tagName: String {
+        tag
+    }
+
+    public var childrenCount: Int {
+        children.count
+    }
 }
 
 

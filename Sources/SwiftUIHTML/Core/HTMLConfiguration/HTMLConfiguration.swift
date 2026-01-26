@@ -16,7 +16,7 @@ public struct HTMLConfiguration: @unchecked Sendable {
     public init() {
         // 최소한 정의
         self = register(
-            tag: "div", "body", "p", "header", "main", "section", "footer", "h1", "h2",
+            tag: "html", "head", "div", "body", "p", "header", "main", "section", "footer", "h1", "h2",
             renderer: DefaultBlockTag.self
         )
         .register(
@@ -69,6 +69,8 @@ extension HTMLConfiguration {
     func createBlock(element: BlockElement) -> some View {
         if let view = dictionary[element.tag] as? any BlockTag.Type  {
             AnyView(view.init(element: element))
+        } else {
+            AnyView(HTMLBlock(element: element))
         }
     }
 

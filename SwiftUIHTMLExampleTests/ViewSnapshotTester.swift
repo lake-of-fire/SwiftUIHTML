@@ -19,6 +19,7 @@ class ViewSnapshotTester {
     static func snapshot<V: View>(
         of view: V,
         named name: String? = nil,
+        html: String? = nil,
         record recording: Bool? = nil,
         sleep sleepDuration: Duration = .seconds(2),
         fileID: StaticString = #fileID,
@@ -67,6 +68,13 @@ class ViewSnapshotTester {
 
         let scale = UIScreen.main.scale
         let image = makeSnapshotImage(of: renderedView, scale: scale)
+        writeSnapshotArtifact(
+            image: image,
+            testName: testName,
+            name: name,
+            html: html,
+            filePath: filePath
+        )
         performOCRDebug(
             image: image,
             testName: testName,
@@ -499,6 +507,43 @@ class ViewSnapshotTester {
             with: "",
             options: .regularExpression
         )
+    }
+
+    private static func writeSnapshotArtifact(
+        image: UIImage,
+        testName: String,
+        name: String?,
+        html: String?,
+        filePath: StaticString
+    ) {
+        let artifactRoot = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"]
+            ?? "/tmp/swiftuihtml-ios-artifacts"
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+        let artifactDir = URL(fileURLWithPath: artifactRoot, isDirectory: true)
+            .appendingPathComponent("HTMLBasicTests")
+        let artifactURL = artifactDir
+            .appendingPathComponent("\(safeTestName).\(identifier)")
+            .appendingPathExtension("png")
+        let htmlURL = artifactDir
+            .appendingPathComponent("\(safeTestName).\(identifier)")
+            .appendingPathExtension("html")
+        do {
+            try FileManager.default.createDirectory(
+                at: artifactDir,
+                withIntermediateDirectories: true
+            )
+            if let data = image.pngData() {
+                try data.write(to: artifactURL)
+            }
+            let htmlCount = html?.count ?? 0
+            AttachmentDebugLogger.record("[Snapshot] artifact html length=\(htmlCount) path=\(htmlURL.path)")
+            if let html, !html.isEmpty {
+                try html.write(to: htmlURL, atomically: true, encoding: .utf8)
+            }
+        } catch {
+            AttachmentDebugLogger.record("[Snapshot] artifact write failed \(error.localizedDescription)")
+        }
     }
 
     private static func loadBaselineImage(

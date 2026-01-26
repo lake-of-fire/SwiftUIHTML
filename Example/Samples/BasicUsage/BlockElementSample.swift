@@ -121,6 +121,7 @@ struct BlockElementSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Block Elements")
         .applyInlineNavigationTitleDisplayMode()

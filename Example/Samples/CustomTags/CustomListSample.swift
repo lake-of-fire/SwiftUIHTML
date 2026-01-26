@@ -150,6 +150,7 @@ let configuration = HTMLConfiguration.default
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Custom List Tags")
         .applyInlineNavigationTitleDisplayMode()

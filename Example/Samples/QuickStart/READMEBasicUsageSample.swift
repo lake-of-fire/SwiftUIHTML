@@ -162,6 +162,7 @@ struct ContentView: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("README Basic Usage")
         .applyInlineNavigationTitleDisplayMode()

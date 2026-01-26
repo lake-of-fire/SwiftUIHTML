@@ -71,6 +71,7 @@ HTMLView(html: html, parser: HTMLFuziParser())
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Hello SwiftUIHTML")
         .applyInlineNavigationTitleDisplayMode()

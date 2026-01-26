@@ -503,6 +503,20 @@ struct HTMLBasicMacOSTests {
                 <span class="yomitan-reading" style="margin-left: 4">[ばめん]</span>
             </div>
             <div class="yomitan-dictionary-title" style="margin-bottom: 4">JMdict [2026-01-17]</div>
+            <div class="yomitan-ruby-samples" style="margin-bottom: 6">
+                <p style="margin: 0 0 4px 0;">Ruby samples:</p>
+                <p style="margin: 0 0 4px 0;">
+                    <ruby>漢字<rt>かんじ</rt></ruby>を読む
+                    <ruby>今日<rt>きょう</rt></ruby>は晴れ
+                </p>
+                <p style="margin: 0 0 4px 0;">
+                    Mixed <ruby>東京<rt>とうきょう</rt></ruby> text and
+                    <ruby>学校<rt>がっこう</rt></ruby>です
+                </p>
+                <p style="margin: 0;">
+                    Inline<ruby>日本語<rt>にほんご</rt></ruby>ruby test
+                </p>
+            </div>
             <div class="yomitan-glossary">
                 <div class="yomitan-glossary-item" style="margin-bottom: 4">
                     <ul lang="en" data-content="glossary" style="list-style-type:circle;">
@@ -527,6 +541,38 @@ struct HTMLBasicMacOSTests {
             of: view,
             width: 320,
             named: "yomitanEntry",
+            snapshotDirectory: iosSnapshotDirectory,
+            sleep: .seconds(2)
+        )
+    }
+
+    @MainActor
+    @Test("Ruby annotation snapshot (macOS)")
+    func testRubyAnnotationSnapshotMacOS() async throws {
+        let html = """
+        <div style="font-size: 26px; line-height: 1.5;">
+            <p style="margin: 0 0 8px 0; font-weight: 600;">Ruby annotation demo</p>
+            <p style="margin: 0 0 10px 0;">
+                <ruby ruby-annotation-font-size="14" ruby-scale="0.72" ruby-color="#1b5e20">漢字<rt>かんじ</rt></ruby>
+                を読む
+            </p>
+            <p style="margin: 0;">
+                <ruby ruby-annotation-font-size="12" ruby-position="after" ruby-color="#0d47a1">東京<rt>とうきょう</rt></ruby>
+                <span style="font-size: 20px;">travel</span>
+            </p>
+        </div>
+        """
+
+        let view = HTMLView(html: html, parser: HTMLFuziParser())
+            .htmlEnvironment(\.configuration, .sample)
+            .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
+            .frame(width: 320)
+            .fixedSize(horizontal: false, vertical: true)
+
+        try await MacViewSnapshotTester.snapshot(
+            of: view,
+            width: 320,
+            named: "rubyAnnotation",
             snapshotDirectory: iosSnapshotDirectory,
             sleep: .seconds(2)
         )

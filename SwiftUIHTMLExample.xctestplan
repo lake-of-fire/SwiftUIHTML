@@ -23,6 +23,14 @@
         "identifier" : "261CAB1B2DBB7B840015BD7E",
         "name" : "SwiftUIHTMLExampleTests"
       }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:SwiftUIHTMLExample.xcodeproj",
+        "identifier" : "9A1B2C3D4E5F60718293A4B5",
+        "name" : "SwiftUIHTMLExampleUITests"
+      }
     }
   ],
   "version" : 1

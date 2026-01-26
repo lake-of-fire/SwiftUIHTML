@@ -17,6 +17,9 @@ struct HTMLFuziParser: HTMLParserable {
             let _html = WhiteSpace(html: html).toNormal()
             let document = try HTMLDocument.parse(string: _html, encoding: String.Encoding.utf8)
 
+            if let body = document.body {
+                return try elementToHTMLNode(element: body)
+            }
             guard let rootElement = document.root else {
                 throw ParserError(errorDescription: "No body element found")
             }
@@ -27,13 +30,13 @@ struct HTMLFuziParser: HTMLParserable {
     }
 
     func elementToHTMLNode(element: Fuzi.XMLElement) throws -> HTMLNode {
-        let tag = element.tag ?? ""
+        let tag = (element.tag ?? "").lowercased()
 
         let attributes = element.attributes.reduce(into: [String: String]()) { result, attribute in
             result[attribute.key] = attribute.value
         }
 
-        let children: [HTMLChild] = try element.childNodes(ofTypes: [.Element, .Text]).compactMap { node -> HTMLChild? in
+        var children: [HTMLChild] = try element.childNodes(ofTypes: [.Element, .Text]).compactMap { node -> HTMLChild? in
             if node.type == .Text {
                 let text = node.stringValue
                 return text.isEmpty ? nil : .text(text)
@@ -44,6 +47,13 @@ struct HTMLFuziParser: HTMLParserable {
                 return .node(try elementToHTMLNode(element: element))
             } else {
                 return nil
+            }
+        }
+        
+        if children.isEmpty {
+            let text = element.stringValue
+            if !text.isEmpty {
+                children = [.text(text)]
             }
         }
 

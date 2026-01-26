@@ -220,6 +220,7 @@ HTMLView(html: html, parser: parser)
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("README CSS Styling")
         .applyInlineNavigationTitleDisplayMode()

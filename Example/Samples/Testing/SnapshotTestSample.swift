@@ -71,6 +71,8 @@ struct SnapshotTestSample: View {
     
     @State private var selectedLineBreakModeOption: LineBreakModeOption = .byWordWrapping
     @State private var frameWidth: CGFloat = 375
+    @State private var parseStatus: String = "Parse: pending"
+    @State private var renderSize: CGSize = .zero
     
     var body: some View {
         ScrollView {
@@ -113,24 +115,38 @@ struct SnapshotTestSample: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Rendering Result")
                         .font(.headline)
+
+                    Text(parseStatus)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
-                        .htmlEnvironment(\.configuration, .sample)
-                        .htmlEnvironment(\.styleContainer, {
-                            var container = HTMLStyleContainer()
-                            let font = ExampleFont.systemFont(ofSize: 14)
-                            container.uiFont = font
-                            container.textLine = .lineHeight(font: font, lineHeight: 20)
-                            container.lineBreakMode = selectedLineBreakModeOption.toLineBreakMode()
-                            return container
-                        }())
-                        .frame(width: frameWidth)
-                        .padding()
-                        .background(Color.platformSystemGray6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.platformSystemGray4, lineWidth: 1)
-                        )
+                    Text("Render size: \(Int(renderSize.width))x\(Int(renderSize.height))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    ZStack {
+                        HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                            .htmlEnvironment(\.configuration, .sample)
+                            .htmlEnvironment(\.styleContainer, {
+                                var container = HTMLStyleContainer()
+                                let font = ExampleFont.systemFont(ofSize: 14)
+                                container.uiFont = font
+                                container.textLine = .lineHeight(font: font, lineHeight: 20)
+                                container.lineBreakMode = selectedLineBreakModeOption.toLineBreakMode()
+                                return container
+                            }())
+                            .frame(width: frameWidth)
+                            .padding()
+                            .background(Color.platformSystemGray6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.platformSystemGray4, lineWidth: 1)
+                            )
+                            .background(RenderSizeReader(size: $renderSize))
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Rendering Result HTML")
+                    .accessibilityIdentifier("RenderingResultHTMLView")
                 }
                 
                 // HTML Editor
@@ -216,8 +232,12 @@ struct SnapshotTestSample: View {
                         }
                         .frame(maxWidth: .infinity)
                         .buttonStyle(.bordered)
-                    }
-                }
+        }
+        .task(id: renderingHTML) {
+            let parsed = HTMLFuziParser().parse(html: renderingHTML)
+            parseStatus = "Parse ok tag=\(parsed.tagName) children=\(parsed.childrenCount) (\(renderingHTML.count) chars)"
+        }
+    }
                 
                 // Test information
                 VStack(alignment: .leading, spacing: 8) {
@@ -235,9 +255,22 @@ struct SnapshotTestSample: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Snapshot Test")
         .applyInlineNavigationTitleDisplayMode()
+    }
+}
+
+private struct RenderSizeReader: View {
+    @Binding var size: CGSize
+
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { size = proxy.size }
+                .onChange(of: proxy.size) { newValue in size = newValue }
+        }
     }
 }
 
