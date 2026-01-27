@@ -24,11 +24,24 @@ struct ULTagView: BlockTag {
     }
 
     func liTag(liElement: BlockElement) -> some View {
-        HStack(alignment: .top, spacing: .zero) {
-            HTMLText(" • ", applyVerticalPadding: false)
+        let isImageOnly = liIsImageOnly(liElement)
+        let alignment: VerticalAlignment = isImageOnly ? .center : .top
+        return HStack(alignment: alignment, spacing: .zero) {
+            markerView(isImageOnly: isImageOnly)
             VStack(alignment: .leading, spacing: 4) {
                 HTMLBlock(element: liElement)
             }
+        }
+    }
+
+    @ViewBuilder
+    func markerView(isImageOnly: Bool) -> some View {
+        let marker = HTMLText(" • ", applyVerticalPadding: false)
+        if isImageOnly {
+            // Nudge list marker upward to visually center with image-only items.
+            marker.offset(y: -0.7)
+        } else {
+            marker
         }
     }
 
@@ -44,6 +57,34 @@ struct ULTagView: BlockTag {
                 return element
             }
         return Array(zip(result.indices, result))
+    }
+
+    func liIsImageOnly(_ element: BlockElement) -> Bool {
+        var hasAttachment = false
+        for content in element.contents {
+            switch content {
+            case .block:
+                return false
+            case .inline(let inline):
+                if isInlineAttachment(inline) {
+                    hasAttachment = true
+                    continue
+                }
+                let text = inline.debugDescription
+                if !ASCIIWhitespace.trim(text).isEmpty {
+                    return false
+                }
+            }
+        }
+        return hasAttachment
+    }
+
+    func isInlineAttachment(_ inline: InlineElement) -> Bool {
+        let tag = inline.tag.lowercased()
+        if tag == "img" || inline.attributes["src"] != nil {
+            return true
+        }
+        return false
     }
 }
 

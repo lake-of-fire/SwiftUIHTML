@@ -111,6 +111,7 @@ class ViewSnapshotTester {
         )
         rawLog("[Raw] captured image size=\(image.size) cg=\(image.cgImage != nil)")
         logPixelMetrics(image: image, testName: testName, name: name)
+        logListItemSquareMetrics(image: image, testName: testName, name: name)
         writeSnapshotArtifact(
             image: image,
             testName: testName,
@@ -299,6 +300,121 @@ class ViewSnapshotTester {
         }
     }
 
+    private static func logListItemSquareMetrics(image: UIImage, testName: String, name: String?) {
+        let label = sanitizePathComponent(testName)
+        let ident = sanitizePathComponent(name ?? "1")
+        let shouldMeasure = testName.contains("testListItemSquareSnapshot") || ident == "listItemSquare"
+        guard shouldMeasure, let cgImage = image.cgImage else { return }
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 1 && height > 1 else { return }
+
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let totalBytes = bytesPerRow * height
+        var buffer = [UInt8](repeating: 0, count: totalBytes)
+        guard let context = CGContext(
+            data: &buffer,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var minX = width
+        var minY = height
+        var maxX = -1
+        var maxY = -1
+        let darkThreshold: UInt8 = 40
+        let alphaThreshold: UInt8 = 10
+        var visited = [Bool](repeating: false, count: width * height)
+        var components: [(minX: Int, minY: Int, maxX: Int, maxY: Int, count: Int)] = []
+
+        func isDark(_ x: Int, _ y: Int) -> Bool {
+            let idx = y * bytesPerRow + x * bytesPerPixel
+            let r = buffer[idx]
+            let g = buffer[idx + 1]
+            let b = buffer[idx + 2]
+            let a = buffer[idx + 3]
+            guard a > alphaThreshold else { return false }
+            return r < darkThreshold && g < darkThreshold && b < darkThreshold
+        }
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let flat = y * width + x
+                if visited[flat] || !isDark(x, y) { continue }
+                var stack = [(x, y)]
+                visited[flat] = true
+                var cminX = x
+                var cmaxX = x
+                var cminY = y
+                var cmaxY = y
+                var count = 0
+                while let (cx, cy) = stack.popLast() {
+                    count += 1
+                    if cx < cminX { cminX = cx }
+                    if cx > cmaxX { cmaxX = cx }
+                    if cy < cminY { cminY = cy }
+                    if cy > cmaxY { cmaxY = cy }
+                    let neighbors = [
+                        (cx - 1, cy), (cx + 1, cy),
+                        (cx, cy - 1), (cx, cy + 1)
+                    ]
+                    for (nx, ny) in neighbors where nx >= 0 && ny >= 0 && nx < width && ny < height {
+                        let nflat = ny * width + nx
+                        if visited[nflat] { continue }
+                        if isDark(nx, ny) {
+                            visited[nflat] = true
+                            stack.append((nx, ny))
+                        }
+                    }
+                }
+                components.append((cminX, cminY, cmaxX, cmaxY, count))
+            }
+        }
+
+        for comp in components {
+            if comp.minX < minX { minX = comp.minX }
+            if comp.minY < minY { minY = comp.minY }
+            if comp.maxX > maxX { maxX = comp.maxX }
+            if comp.maxY > maxY { maxY = comp.maxY }
+        }
+
+        let squareCandidate = components
+            .filter {
+                let w = $0.maxX - $0.minX + 1
+                let h = $0.maxY - $0.minY + 1
+                return w >= 8 && w <= 14 && h >= 8 && h <= 14
+            }
+            .max { $0.count < $1.count }
+
+        guard maxX >= minX, maxY >= minY else {
+            let line = "[ListSquareMetrics] \(label).\(ident) no-dark-components"
+            print(line)
+            AttachmentDebugLogger.record(line)
+            return
+        }
+
+        if let square = squareCandidate {
+            let overallCenterY = Double(minY + maxY) / 2.0
+            let squareCenterY = Double(square.minY + square.maxY) / 2.0
+            let delta = squareCenterY - overallCenterY
+            let squareW = square.maxX - square.minX + 1
+            let squareH = square.maxY - square.minY + 1
+            let line = "[ListSquareMetrics] \(label).\(ident) overall=(\(minX),\(minY),\(maxX),\(maxY)) square=(\(square.minX),\(square.minY),\(square.maxX),\(square.maxY)) squareSize=\(squareW)x\(squareH) deltaCenterY=\(String(format: "%.2f", delta))"
+            print(line)
+            AttachmentDebugLogger.record(line)
+        } else {
+            let line = "[ListSquareMetrics] \(label).\(ident) squareNotFound overall=(\(minX),\(minY),\(maxX),\(maxY)) components=\(components.count)"
+            print(line)
+            AttachmentDebugLogger.record(line)
+        }
+    }
+
     private static func recordIssue(
         _ message: String,
         fileID: StaticString,
@@ -456,12 +572,12 @@ class ViewSnapshotTester {
            !existing.isEmpty {
             return URL(fileURLWithPath: existing, isDirectory: true)
         }
+        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            return documents.appendingPathComponent("swiftuihtml-ios-artifacts", isDirectory: true)
+        }
         let tempRoot = FileManager.default.temporaryDirectory
         if !tempRoot.path.isEmpty {
             return tempRoot.appendingPathComponent("swiftuihtml-ios-artifacts", isDirectory: true)
-        }
-        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            return documents.appendingPathComponent("swiftuihtml-ios-artifacts", isDirectory: true)
         }
         return URL(fileURLWithPath: "/tmp/swiftuihtml-ios-artifacts", isDirectory: true)
     }

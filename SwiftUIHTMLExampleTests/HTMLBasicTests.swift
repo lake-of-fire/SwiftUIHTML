@@ -611,6 +611,25 @@ class HTMLBasicTests {
             sleep: .seconds(2)
         )
     }
+
+    @MainActor
+    @Test("List item square snapshot")
+    func testListItemSquareSnapshot() async throws {
+        let html = "<body><ul><li><img src=\"https://dummyimage.com/10x10/000/000.png\" width=\"10\" height=\"10\" /></li></ul></body>"
+
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
+            .htmlEnvironment(\.configuration, .sample)
+            .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
+            .frame(width: 200, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+
+        try await ViewSnapshotTester.snapshot(
+            of: view,
+            named: "listItemSquare",
+            html: html,
+            sleep: .seconds(2)
+        )
+    }
 }
 
 private struct WordBrekFrameReporter: View {

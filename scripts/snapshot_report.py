@@ -420,9 +420,12 @@ def build_report(artifacts_dir, baseline_dir, title, out_prefix):
 
     rows = []
     for artifact in sorted(artifacts_dir.rglob("*.png")):
+        name = artifact.name
+        if name.startswith(("reference_", "failure_", "difference_", "diff-")):
+            continue
         group = artifact.parent.relative_to(artifacts_dir).as_posix() or "."
-        baseline = baseline_dir / artifact.name
-        rows.append((group, artifact.name, baseline, artifact))
+        baseline = baseline_dir / name
+        rows.append((group, name, baseline, artifact))
 
     css = """
 body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 24px; background: #f7f7f7; }
@@ -430,7 +433,10 @@ body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 24px; b
 .group { margin-top: 28px; }
 .card { background: #fff; border-radius: 12px; padding: 16px; margin: 16px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
 .title { font-weight: 600; margin-bottom: 12px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; }
+.details { margin-top: 10px; }
+.details-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.html-preview { display: none; margin-top: 8px; border: 1px solid #e5e5e5; border-radius: 8px; background: #fff; }
 .label { font-size: 12px; color: #666; margin-bottom: 6px; }
 img { width: 100%; height: auto; border: 1px solid #eee; background: #fff; }
 .path { font-size: 11px; color: #999; word-break: break-all; }
@@ -494,7 +500,6 @@ function toggleHtml(id) {
             parts.append("<div class='missing'>Missing baseline</div>")
             parts.append(f"<div class='path'>{html.escape(str(baseline))}</div>")
         parts.append("</div>")
-
         parts.append("<div>")
         parts.append("<div class='label'>New</div>")
         parts.append(f"<img src='file://{artifact}' />")
@@ -519,6 +524,8 @@ function toggleHtml(id) {
             parts.append("<div class='missing'>Diff unavailable</div>")
         parts.append("</div>")
 
+        parts.append("</div>")  # grid
+
         html_path = artifact.with_suffix(".html")
         if not html_path.exists():
             html_path = baseline.with_suffix(".html")
@@ -534,7 +541,11 @@ function toggleHtml(id) {
             f"<style>{BASE_CSS}</style></head><body>"
             f"<div class='snapshot-root'>{html_payload}</div></body></html>"
         )
+        parts.append("<div class='details'>")
+        parts.append("<div class='details-row'>")
         parts.append(f"<button class='toggle' onclick=\"toggleHtml('{html_id}')\">Toggle HTML input</button>")
+        parts.append(f"<div class='label'>HTML Snapshot</div>")
+        parts.append("</div>")
         parts.append(f"<pre id='{html_id}' class='html-block'>{html.escape(html_payload)}</pre>")
         parts.append(f"<div id='{html_id}-preview' class='html-preview'><iframe srcdoc=\"{html.escape(iframe_doc)}\"></iframe></div>")
 
@@ -558,7 +569,8 @@ function toggleHtml(id) {
         if ocr_lines:
             parts.append(f"<pre id='{html_id}-ocr' class='ocr-block'>{html.escape('\\n\\n'.join(ocr_lines))}</pre>")
 
-        parts.append("</div>")
+        parts.append("</div>")  # details
+        parts.append("</div>")  # card
 
     parts.append("</body></html>")
 

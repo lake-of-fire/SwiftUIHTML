@@ -2,7 +2,8 @@
 set -euo pipefail
 root="${1:-/tmp/swiftuihtml-ios-artifacts}"
 # Find the newest artifacts directory under any simulator app container.
-base="$HOME/Library/Developer/CoreSimulator/Devices"
+core_sim="$HOME/Library/Developer/CoreSimulator/Devices"
+xctest_devices="$HOME/Library/Developer/XCTestDevices"
 latest_path=""
 latest_mtime=0
 while IFS= read -r -d '' dir; do
@@ -12,7 +13,10 @@ while IFS= read -r -d '' dir; do
     latest_path="$dir"
   fi
 done <<EOF
-$(find "$base" -path "*/data/Containers/Data/Application/*/Documents/swiftuihtml-ios-artifacts" -type d -print0 2>/dev/null)
+$(find "$core_sim" "$xctest_devices" \
+  \( -path "*/data/Containers/Data/Application/*/Documents/swiftuihtml-ios-artifacts" -o \
+     -path "*/data/Containers/Data/Application/*/tmp/swiftuihtml-ios-artifacts" \) \
+  -type d -print0 2>/dev/null)
 EOF
 
 if [ -z "$latest_path" ]; then
