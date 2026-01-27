@@ -67,7 +67,7 @@ struct LineBreakSample: View {
                     Text("Word-based line breaking (.byWordWrapping)")
                         .font(.headline)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
@@ -91,7 +91,7 @@ struct LineBreakSample: View {
                     Text("Character-based line breaking (.byCharWrapping)")
                         .font(.headline)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()

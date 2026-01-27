@@ -6,6 +6,12 @@ import subprocess
 import time
 from pathlib import Path
 
+BASE_CSS = (
+    "html,body{margin:0;padding:0;font-family:-apple-system,Helvetica,Arial,sans-serif;"
+    "font-size:16px;line-height:1.4;background:#fff;color:#111;}"
+    ".snapshot-root{padding:12px;}"
+)
+
 
 def run_magick(args):
     candidates = [
@@ -46,6 +52,84 @@ def run_compare(base_path, new_path, output_path):
         except FileNotFoundError:
             continue
     return None
+
+
+def run_vision_ocr(image_path):
+    script = Path(__file__).parent / "vision_ocr.swift"
+    if not script.exists():
+        return None
+    tool = ensure_swift_tool(script, "vision_ocr", ["Vision", "AppKit"])
+    if not tool:
+        return None
+    try:
+        result = subprocess.run(
+            [str(tool), str(image_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return None
+    output = result.stdout.strip()
+    if not output and result.stderr.strip():
+        output = f"error: {result.stderr.strip()}"
+    if not output:
+        return None
+    return output
+
+
+def render_html_preview(html_payload, out_path, width=600, height=220):
+    script = Path(__file__).parent / "render_html.swift"
+    if not script.exists():
+        return False
+    tool = ensure_swift_tool(script, "render_html", ["WebKit", "AppKit"])
+    if not tool:
+        return False
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    html_path = out_path.with_suffix(".html")
+    payload = (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        f"<style>{BASE_CSS}</style></head><body>"
+        f"<div class='snapshot-root'>{html_payload}</div></body></html>"
+    )
+    html_path.write_text(payload, encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [str(tool), str(html_path), str(out_path), str(width), str(height)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False
+    return result.returncode == 0 and out_path.exists()
+
+
+def ensure_swift_tool(script_path, name, frameworks):
+    tools_dir = Path("/tmp/swiftuihtml-report-tools")
+    tools_dir.mkdir(parents=True, exist_ok=True)
+    binary = tools_dir / name
+    script_mtime = script_path.stat().st_mtime
+    if binary.exists() and binary.stat().st_mtime >= script_mtime:
+        return binary
+    cmd = ["swiftc", str(script_path), "-o", str(binary)]
+    for framework in frameworks:
+        cmd += ["-framework", framework]
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    return binary
 
 
 def image_metrics(path):
@@ -182,6 +266,14 @@ def heuristic_flags(base, new):
         flags.append("low ink coverage vs baseline")
     if base_edge is not None and new_edge is not None and base_edge > 0.01 and new_edge < base_edge * 0.6:
         flags.append("low edge detail vs baseline")
+    if (
+        base_nonwhite is not None and new_nonwhite is not None
+        and base_edge is not None and new_edge is not None
+        and base_nonwhite > 0.05
+        and new_nonwhite < base_nonwhite * 0.5
+        and new_edge < base_edge * 0.5
+    ):
+        flags.append("possible missing images (low nonwhite + low edge)")
     return flags
 
 
@@ -235,14 +327,22 @@ img { width: 100%; height: auto; border: 1px solid #eee; background: #fff; }
 .flag { color: #b00020; font-size: 12px; font-weight: 600; margin-top: 6px; }
 .toggle { margin-top: 8px; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; }
 .html-block { display: none; margin-top: 10px; background: #0f0f0f; color: #e8e8e8; padding: 12px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+.html-preview { display: none; margin-top: 10px; border: 1px solid #e5e5e5; border-radius: 8px; background: #fff; }
+.html-preview iframe { width: 100%; height: 220px; border: 0; border-radius: 8px; }
+.ocr-block { display: none; margin-top: 10px; background: #111; color: #eaeaea; padding: 10px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
 """
 
     script = """
 <script>
 function toggleHtml(id) {
   var el = document.getElementById(id);
-  if (!el) return;
-  el.style.display = (el.style.display === "block") ? "none" : "block";
+  var preview = document.getElementById(id + "-preview");
+  var ocr = document.getElementById(id + "-ocr");
+  if (!el || !preview) return;
+  var show = (el.style.display !== "block");
+  el.style.display = show ? "block" : "none";
+  preview.style.display = show ? "block" : "none";
+  if (ocr) ocr.style.display = show ? "block" : "none";
 }
 </script>
 """
@@ -310,8 +410,34 @@ function toggleHtml(id) {
             html_payload = ""
         if not html_payload:
             html_payload = "No HTML input captured for this snapshot."
+        iframe_doc = (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            f"<style>{BASE_CSS}</style></head><body>"
+            f"<div class='snapshot-root'>{html_payload}</div></body></html>"
+        )
         parts.append(f"<button class='toggle' onclick=\"toggleHtml('{html_id}')\">Toggle HTML input</button>")
         parts.append(f"<pre id='{html_id}' class='html-block'>{html.escape(html_payload)}</pre>")
+        parts.append(f"<div id='{html_id}-preview' class='html-preview'><iframe srcdoc=\"{html.escape(iframe_doc)}\"></iframe></div>")
+
+        ocr_payloads = []
+        if baseline.exists():
+            ocr_payloads.append(("baseline", run_vision_ocr(baseline)))
+        if artifact.exists():
+            ocr_payloads.append(("new", run_vision_ocr(artifact)))
+        render_path = report_dir / f"render-{group.replace('/', '_')}-{name}"
+        if render_html_preview(html_payload, render_path):
+            parts.append(f"<div class='label'>HTML Render</div>")
+            parts.append(f"<img src='file://{render_path}' />")
+            ocr_payloads.append(("html", run_vision_ocr(render_path)))
+
+        ocr_lines = []
+        for label, payload in ocr_payloads:
+            if not payload:
+                ocr_lines.append(f"{label}: (ocr unavailable)")
+            else:
+                ocr_lines.append(f"{label}:\n{payload}")
+        if ocr_lines:
+            parts.append(f"<pre id='{html_id}-ocr' class='ocr-block'>{html.escape('\\n\\n'.join(ocr_lines))}</pre>")
 
         parts.append("</div>")
 

@@ -65,7 +65,7 @@ struct CSSStyleExample: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .padding()
         }
@@ -101,7 +101,7 @@ struct FontFamilyExample: View {
         """
     
     var body: some View {
-        HTMLView(html: html, parser: HTMLFuziParser())
+        HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .default)
             .padding()
     }
@@ -127,13 +127,13 @@ struct StyleContainerExample: View {
     var body: some View {
         VStack(spacing: 30) {
             // 작은 폰트, 좁은 줄 간격
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, smallStyleContainer())
                 .border(Color.blue)
             
             // 큰 폰트, 넓은 줄 간격
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, largeStyleContainer())
                 .border(Color.green)
@@ -192,7 +192,7 @@ struct LineSpacingExample: View {
         VStack(spacing: 20) {
             Text("줄 높이 18pt")
                 .font(.caption)
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
@@ -209,7 +209,7 @@ struct LineSpacingExample: View {
             
             Text("줄 높이 24pt")
                 .font(.caption)
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
@@ -226,7 +226,7 @@ struct LineSpacingExample: View {
             
             Text("줄 간격 8pt")
                 .font(.caption)
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
@@ -271,7 +271,7 @@ struct LineBreakModeExample: View {
         VStack(spacing: 20) {
             Text("단어 단위 줄바꿈 (byWordWrapping)")
                 .font(.caption)
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
@@ -289,7 +289,7 @@ struct LineBreakModeExample: View {
             
             Text("문자 단위 줄바꿈 (byCharWrapping)")
                 .font(.caption)
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
@@ -339,7 +339,7 @@ struct WordBreakExample: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .padding()
         }
@@ -393,7 +393,7 @@ struct BoxModelExample: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .padding()
         }
@@ -447,7 +447,7 @@ struct BorderStyleExample: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .padding()
         }
@@ -498,7 +498,7 @@ struct ComplexStyleExample: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .htmlEnvironment(\.styleContainer, {
                     var container = HTMLStyleContainer()
@@ -549,7 +549,7 @@ struct StyleInheritanceExample: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, .default)
                 .padding()
         }

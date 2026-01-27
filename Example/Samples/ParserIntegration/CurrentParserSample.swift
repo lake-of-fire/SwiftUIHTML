@@ -5,16 +5,16 @@ import SwiftUIHTML
 
 struct CurrentParserSample: View {
     let html = """
-        <h2>Current Parser: HTMLFuziParser</h2>
+        <h2>Current Parser: HTMLSwiftSoupParser</h2>
         
-        <p>This app uses the <strong>Fuzi</strong> library to parse HTML.</p>
+        <p>This app uses the <strong>SwiftSoup</strong> library to parse HTML.</p>
         
         <div style="border: 1px solid #ccc; padding: 12px; background-color: #f9f9f9;">
-            <h3>Features of Fuzi Parser:</h3>
+            <h3>Features of SwiftSoup Parser:</h3>
             <p>
-                • <strong>Fast Performance</strong>: libxml2 based<br>
-                • <strong>Memory Efficient</strong>: Optimized parsing<br>
-                • <strong>XML/HTML Support</strong>: Various format handling
+                • <strong>HTML Parsing</strong>: Robust HTML parsing in Swift<br>
+                • <strong>CSS Selectors</strong>: Query and traverse elements<br>
+                • <strong>Document Model</strong>: Easy element access and manipulation
             </p>
         </div>
         
@@ -36,7 +36,7 @@ struct CurrentParserSample: View {
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
-                    Text("Currently using HTMLFuziParser")
+                    Text("Currently using HTMLSwiftSoupParser")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -44,7 +44,7 @@ struct CurrentParserSample: View {
                 Divider()
                 
                 // HTML Rendering
-                HTMLView(html: html, parser: HTMLFuziParser())
+                HTMLView(html: html, parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
@@ -53,10 +53,10 @@ struct CurrentParserSample: View {
                 
                 // Parser Information
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("HTMLFuziParser")
+                    Text("HTMLSwiftSoupParser")
                         .font(.headline)
                     
-                    Text("The default parser used in the Example project. Converts HTML to HTMLNode structure based on the Fuzi library.")
+                    Text("The default parser used in the Example project. Converts HTML to HTMLNode structure based on the SwiftSoup library.")
                         .font(.body)
                 }
                 
@@ -66,14 +66,15 @@ struct CurrentParserSample: View {
                         .font(.headline)
                     
                     Text("""
-struct HTMLFuziParser: HTMLParserable {
+struct HTMLSwiftSoupParser: HTMLParserable {
     func parse(html: String) -> HTMLNode {
         do {
-            let document = try HTMLDocument(string: html, encoding: .utf8)
-            guard let rootElement = document.root else {
-                throw ParseError.noRootElement
+            let document = try SwiftSoup.parse(html)
+            if let body = document.body() {
+                return try elementToHTMLNode(element: body)
             }
-            return try elementToHTMLNode(element: rootElement)
+            let wrapper = try document.select("*").first() ?? document
+            return try elementToHTMLNode(element: wrapper)
         } catch {
             return HTMLNode(tag: "div", children: [.text("Parse error")])
         }
@@ -88,15 +89,15 @@ struct HTMLFuziParser: HTMLParserable {
                 
                 // Advantages
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Fuzi Parser Advantages")
+                    Text("SwiftSoup Parser Advantages")
                         .font(.headline)
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text("• Fast parsing performance")
-                        Text("• Memory efficient")
+                        Text("• CSS selector support")
                         Text("• Accurate HTML structure analysis")
-                        Text("• libxml2-based stability")
-                        Text("• Various HTML format support")
+                        Text("• Pure Swift parser")
+                        Text("• Flexible HTML manipulation")
                     }
                     .font(.body)
                 }
@@ -106,7 +107,7 @@ struct HTMLFuziParser: HTMLParserable {
                     Text("Parser Selection Guide")
                         .font(.headline)
                     
-                    Text("SwiftUIHTML can use any parser that implements the HTMLParserable protocol. You can choose Fuzi, SwiftSoup, or custom parsers.")
+                    Text("SwiftUIHTML can use any parser that implements the HTMLParserable protocol. You can choose SwiftSoup or custom parsers.")
                         .font(.body)
                         .foregroundColor(.secondary)
                 }

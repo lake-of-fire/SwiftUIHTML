@@ -59,7 +59,7 @@ enum SampleCategory: String, CaseIterable, Identifiable {
             ]
         case .parserIntegration:
             var items: [SampleItem] = [
-                SampleItem(title: "Current Parser", description: "Currently used Fuzi parser", view: AnyView(CurrentParserSample())),
+                SampleItem(title: "Current Parser", description: "Currently used SwiftSoup parser", view: AnyView(CurrentParserSample())),
                 SampleItem(title: "Complex HTML", description: "Complex HTML structure parsing", view: AnyView(ComplexHTMLSample()))
             ]
 #if canImport(SwiftSoup)

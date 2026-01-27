@@ -82,7 +82,7 @@ struct HighlightTagSample: View {
                 Divider()
                 
                 // HTML Rendering
-                HTMLView(html: html, parser: HTMLFuziParser())
+                HTMLView(html: html, parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, highlightConfiguration)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()

@@ -5,9 +5,25 @@ actor AttachmentLayoutTracker {
     static let shared = AttachmentLayoutTracker()
 
     private var lastUpdate: Date = .distantPast
+    private var lastCounts: AttachmentCounts?
+
+    struct AttachmentCounts: Sendable {
+        let expected: Int
+        let expectedImages: Int
+        let prepared: Int
+        let uniqueKeys: Int
+    }
 
     func markUpdated() {
         lastUpdate = Date()
+    }
+
+    func recordCounts(_ counts: AttachmentCounts) {
+        lastCounts = counts
+    }
+
+    func snapshotCounts() -> AttachmentCounts? {
+        lastCounts
     }
 
     func waitUntilIdle(timeoutSeconds: TimeInterval, quietSeconds: TimeInterval = 0.35) async -> Bool {

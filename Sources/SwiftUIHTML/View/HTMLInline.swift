@@ -79,14 +79,7 @@ struct HTMLInline: View {
                     let imageText = Text(
                         attachmentImage(for: type, styleContainer: styleContainer)
                     )
-#if os(macOS)
-                    if let font = styleContainer.uiFont {
-                        return result + imageText.font(.custom(font.fontName, size: font.pointSize))
-                    }
-                    return result + imageText
-#else
                     return result + imageText.font(.system(size: 1))
-#endif
                 }
             }
     }
@@ -120,10 +113,11 @@ private extension HTMLInline {
             styleContainer: styleContainer
         ))
 #else
-        return Image(uiImage: attachmentManager.sizeImage(
+        let image = attachmentManager.sizeImage(
             key: type,
             styleContainer: styleContainer
-        ))
+        )
+        return Image(uiImage: image.withRenderingMode(.alwaysOriginal))
 #endif
     }
 }

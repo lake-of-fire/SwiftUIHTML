@@ -56,10 +56,12 @@ extension HTMLConfiguration {
 // MARK: - Internal Helper
 @MainActor
 extension HTMLConfiguration {
+    @inline(__always)
     func tagType(of tag: String) -> TagType? {
         dictionaryType[tag]
     }
 
+    @inline(__always)
     func applyStyles(tag: String, attributes: [String: AttributeValue], to styleContainer: inout HTMLStyleContainer) {
         attributeStyle.applyStyles(attributes: attributes, to: &styleContainer)
         dictionary[tag]?.applyStyles(with: attributes, to: &styleContainer)

@@ -15,9 +15,16 @@ final class CoreTextRunDelegateManager {
             },
             getAscent: { pointer -> CGFloat in
                 let attachment = Unmanaged<TextAttachment>.fromOpaque(pointer).takeUnretainedValue()
+                if let metrics = attachment.rubyMetrics() {
+                    return metrics.ascent
+                }
                 return attachment.getAdjustedSize().height
             },
-            getDescent: { _ in
+            getDescent: { pointer in
+                let attachment = Unmanaged<TextAttachment>.fromOpaque(pointer).takeUnretainedValue()
+                if let metrics = attachment.rubyMetrics() {
+                    return metrics.descent
+                }
                 return 0
             },
             getWidth: { pointer -> CGFloat in

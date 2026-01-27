@@ -45,7 +45,7 @@ struct READMEBasicUsageSample: View {
                     Text("Rendering Result")
                         .font(.headline)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, createStyleContainer())
                         .padding()
@@ -96,7 +96,7 @@ struct ContentView: View {
         \"\"\"
     
     var body: some View {
-        HTMLView(html: html, parser: HTMLFuziParser())
+        HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\\.configuration, .default)
             .htmlEnvironment(\\.styleContainer, createStyleContainer())
     }
@@ -123,7 +123,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("• Same example as basic usage in README.md")
                         Text("• Edit HTML directly and check results with 'Apply' button")
-                        Text("• Basic usage of HTMLView + HTMLFuziParser")
+                        Text("• Basic usage of HTMLView + HTMLSwiftSoupParser")
                         Text("• Font and line break settings with HTMLStyleContainer")
                     }
                     .font(.body)

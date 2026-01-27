@@ -37,10 +37,10 @@ final class TextAttachment: NSTextAttachment {
 
     func getAdjustedSize() -> CGSize {
         guard let font else { return bounds.size }
+#if os(macOS)
         if bounds.size.width <= 1 || bounds.size.height <= 1 {
             return bounds.size
         }
-#if os(macOS)
         let targetHeight = round(max(font.manabiBoundingBoxMaxY, font.manabiLineHeight))
 #else
         let targetHeight = round(font.manabiBoundingBoxMaxY)
@@ -62,9 +62,15 @@ final class TextAttachment: NSTextAttachment {
             adjustedHeight += targetHeight - font.manabiLineHeight
         }
 
+        let finalHeight: CGFloat
+#if os(macOS)
+        finalHeight = max(bounds.size.height, targetHeight, adjustedHeight)
+#else
+        finalHeight = max(targetHeight, adjustedHeight)
+#endif
         let final = CGSize(
             width: bounds.size.width,
-            height: max(targetHeight, adjustedHeight)
+            height: finalHeight
         )
         if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
             || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
@@ -81,13 +87,33 @@ final class TextAttachment: NSTextAttachment {
         if bounds.size.width <= 1 || bounds.size.height <= 1 {
             return point
         }
-        let adjustedSize = getAdjustedSize()
+        if isRubyAttachment {
+            let metrics = rubyMetrics()
+            let fontHeight = font.manabiFontHeight
+            let lineHeight = lineHeightOverride ?? textLine?.lineHeight ?? fontHeight
+            let ascent = metrics?.ascent ?? fontHeight
+            let descent = metrics?.descent ?? max(0, fontHeight - ascent)
+#if os(macOS)
+            let adjusted = CGPoint(x: point.x, y: point.y)
+#else
+            let adjusted = CGPoint(x: point.x, y: point.y - ascent)
+#endif
+            if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
+                || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
+                || NSClassFromString("XCTestCase") != nil {
+                let rubyPosition = metrics.map { Int($0.position.rawValue) } ?? -1
+                AttachmentDebugLogger.record(
+                    "[Attachment][Ruby] offset key=\(key) point=\(point) boundsH=\(bounds.size.height) fontHeight=\(fontHeight) lineHeight=\(lineHeight) ascent=\(ascent) descent=\(descent) extra=\(metrics?.extra ?? -1) position=\(rubyPosition) adjusted=\(adjusted)"
+                )
+            }
+            return adjusted
+        }
 #if os(macOS)
         let fontHeight = font.manabiFontHeight
-        let boundHeight = adjustedSize.height
+        let boundHeight = getAdjustedSize().height
 #else
         let fontHeight = font.manabiFontHeight
-        let boundHeight = adjustedSize.height
+        let boundHeight = getAdjustedSize().height
 #endif
         let lineHeight = lineHeightOverride ?? textLine?.lineHeight ?? fontHeight
 
@@ -96,7 +122,18 @@ final class TextAttachment: NSTextAttachment {
         if lineHeight < boundHeight {
             verticalOffset -= (boundHeight - lineHeight) / 2
         }
-        let adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
+        var adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
+#if os(macOS)
+        if let lineHeightOverride, lineHeightOverride > 0 {
+            let baseLineHeight = textLine?.lineHeight ?? font.manabiLineHeight
+            if bounds.size.height < baseLineHeight {
+                let extra = (lineHeightOverride - font.manabiLineHeight) / 2
+                if extra > 0 {
+                    adjusted.y -= extra
+                }
+            }
+        }
+#endif
         if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
             || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
             || NSClassFromString("XCTestCase") != nil {
@@ -107,4 +144,67 @@ final class TextAttachment: NSTextAttachment {
         return adjusted
     }
 
+}
+
+extension TextAttachment {
+    var isRubyAttachment: Bool {
+        guard let textType = key.base as? TextType else { return false }
+        guard case let .attachment(_, tag, _, _) = textType else { return false }
+        return tag == "ruby"
+    }
+
+    struct RubyMetrics {
+        let ascent: CGFloat
+        let descent: CGFloat
+        let extra: CGFloat
+        let position: CTRubyPosition
+    }
+
+    func rubyMetrics() -> RubyMetrics? {
+        guard isRubyAttachment, let font else { return nil }
+        let ctFont = font.manabiCTFont
+        let baseAscent = CTFontGetAscent(ctFont)
+        let baseDescent = CTFontGetDescent(ctFont)
+        let baseHeight = baseAscent + baseDescent
+        let extra = max(0, bounds.size.height - baseHeight)
+        let position = rubyPosition
+        let extraAbove: CGFloat
+        let extraBelow: CGFloat
+        switch position {
+        case .before:
+            extraAbove = extra
+            extraBelow = 0
+        case .after:
+            extraAbove = 0
+            extraBelow = extra
+        default:
+            extraAbove = extra / 2
+            extraBelow = extra / 2
+        }
+        return RubyMetrics(
+            ascent: baseAscent + extraAbove,
+            descent: baseDescent + extraBelow,
+            extra: extra,
+            position: position
+        )
+    }
+}
+
+private extension TextAttachment {
+    var rubyPosition: CTRubyPosition {
+        guard let textType = key.base as? TextType else { return .before }
+        guard case let .attachment(_, _, attributes, _) = textType else { return .before }
+        let cssStyle = attributes["style"]?.cssStyle ?? .empty
+        let raw = attributes["ruby-position"]?.string ?? cssStyle["ruby-position"]?.string
+        switch raw {
+        case "over": return .before
+        case "under": return .after
+        case "inter-character": return .interCharacter
+        case "after": return .after
+        case "before": return .before
+        case "interCharacter": return .interCharacter
+        case "inline": return .inline
+        default: return .before
+        }
+    }
 }

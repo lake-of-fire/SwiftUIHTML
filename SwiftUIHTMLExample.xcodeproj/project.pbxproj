@@ -7,14 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		261846002DBF67F7001739B1 /* Fuzi in Frameworks */ = {isa = PBXBuildFile; productRef = 261845FF2DBF67F7001739B1 /* Fuzi */; };
+		261846002DBF67F7001739B1 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 261845FF2DBF67F7001739B1 /* SwiftSoup */; };
 		261CAB2B2DBB7BBF0015BD7E /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */; };
-		261CAB2E2DBB7BCF0015BD7E /* Fuzi in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2D2DBB7BCF0015BD7E /* Fuzi */; };
+		261CAB2E2DBB7BCF0015BD7E /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2D2DBB7BCF0015BD7E /* SwiftSoup */; };
 		26F6EF122DC1E8E400024B85 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF112DC1E8E400024B85 /* SwiftUIHTML */; };
 		26F6EF142DC1E8F600024B85 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF132DC1E8F600024B85 /* SwiftUIHTML */; };
 		27585C06A5564924A5E83908 /* SwiftUIHTML in Frameworks */ = {isa = PBXBuildFile; productRef = 26F6EF132DC1E8F600024B85 /* SwiftUIHTML */; };
 		2FFF49397FD849E7A06FC80A /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */; };
-		48D828A9F4CE40D88A69C059 /* Fuzi in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2D2DBB7BCF0015BD7E /* Fuzi */; };
+		48D828A9F4CE40D88A69C059 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 261CAB2D2DBB7BCF0015BD7E /* SwiftSoup */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,7 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				261846002DBF67F7001739B1 /* Fuzi in Frameworks */,
+				261846002DBF67F7001739B1 /* SwiftSoup in Frameworks */,
 				26F6EF122DC1E8E400024B85 /* SwiftUIHTML in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -80,7 +80,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				261CAB2E2DBB7BCF0015BD7E /* Fuzi in Frameworks */,
+				261CAB2E2DBB7BCF0015BD7E /* SwiftSoup in Frameworks */,
 				26F6EF142DC1E8F600024B85 /* SwiftUIHTML in Frameworks */,
 				261CAB2B2DBB7BBF0015BD7E /* SnapshotTesting in Frameworks */,
 			);
@@ -104,7 +104,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				48D828A9F4CE40D88A69C059 /* Fuzi in Frameworks */,
+				48D828A9F4CE40D88A69C059 /* SwiftSoup in Frameworks */,
 				27585C06A5564924A5E83908 /* SwiftUIHTML in Frameworks */,
 				2FFF49397FD849E7A06FC80A /* SnapshotTesting in Frameworks */,
 			);
@@ -168,7 +168,7 @@
 			);
 			name = SwiftUIHTMLExample;
 			packageProductDependencies = (
-				261845FF2DBF67F7001739B1 /* Fuzi */,
+				261845FF2DBF67F7001739B1 /* SwiftSoup */,
 				26F6EF112DC1E8E400024B85 /* SwiftUIHTML */,
 			);
 			productName = SwiftUIHTML;
@@ -194,7 +194,7 @@
 			name = SwiftUIHTMLExampleTests;
 			packageProductDependencies = (
 				261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */,
-				261CAB2D2DBB7BCF0015BD7E /* Fuzi */,
+				261CAB2D2DBB7BCF0015BD7E /* SwiftSoup */,
 				26F6EF132DC1E8F600024B85 /* SwiftUIHTML */,
 			);
 			productName = SwiftUIHTMLTests;
@@ -243,7 +243,7 @@
 			name = SwiftUIHTMLExampleMacOSTests;
 			packageProductDependencies = (
 				261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */,
-				261CAB2D2DBB7BCF0015BD7E /* Fuzi */,
+				261CAB2D2DBB7BCF0015BD7E /* SwiftSoup */,
 				26F6EF132DC1E8F600024B85 /* SwiftUIHTML */,
 			);
 			productName = SwiftUIHTMLExampleMacOSTests;
@@ -315,7 +315,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				261CAB292DBB7BBF0015BD7E /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
-				261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "Fuzi" */,
+				261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				26F6EF102DC1E8E400024B85 /* XCLocalSwiftPackageReference "../SwiftUIHTML" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -552,11 +552,16 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Example/SwiftUIHTMLExample.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "";
+				"CODE_SIGNING_ALLOWED[sdk=macosx*]" = NO;
+				"CODE_SIGNING_REQUIRED[sdk=macosx*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Example/Preview Content\"";
 				DEVELOPMENT_TEAM = 8Y769YTXHF;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = "";
 				ENABLE_HARDENED_RUNTIME = YES;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SwiftUIHTMLExample-Info.plist";
@@ -593,11 +598,16 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Example/SwiftUIHTMLExample.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "";
+				"CODE_SIGNING_ALLOWED[sdk=macosx*]" = NO;
+				"CODE_SIGNING_REQUIRED[sdk=macosx*]" = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Example/Preview Content\"";
 				DEVELOPMENT_TEAM = 8Y769YTXHF;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = "";
 				ENABLE_HARDENED_RUNTIME = YES;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "SwiftUIHTMLExample-Info.plist";
@@ -673,9 +683,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZLQVH78B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
@@ -692,9 +705,12 @@
 		7B8C9D0E1F20314253647588 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZLQVH78B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
@@ -712,9 +728,12 @@
 		7B8C9D0E1F20314253647589 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZLQVH78B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
@@ -773,9 +792,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ZLQVH78B5Q;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
@@ -864,31 +886,31 @@
 				minimumVersion = 1.18.3;
 			};
 		};
-		261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "Fuzi" */ = {
+		261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/rinsuki/Fuzi";
+			repositoryURL = "https://github.com/scinfu/SwiftSoup.git";
 			requirement = {
-				branch = "rename-to-parse-from-init";
+				branch = "master";
 				kind = branch;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		261845FF2DBF67F7001739B1 /* Fuzi */ = {
+		261845FF2DBF67F7001739B1 /* SwiftSoup */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "Fuzi" */;
-			productName = Fuzi;
+			package = 261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
 		};
 		261CAB2A2DBB7BBF0015BD7E /* SnapshotTesting */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 261CAB292DBB7BBF0015BD7E /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
 			productName = SnapshotTesting;
 		};
-		261CAB2D2DBB7BCF0015BD7E /* Fuzi */ = {
+		261CAB2D2DBB7BCF0015BD7E /* SwiftSoup */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "Fuzi" */;
-			productName = Fuzi;
+			package = 261CAB2C2DBB7BCF0015BD7E /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
 		};
 		26F6EF112DC1E8E400024B85 /* SwiftUIHTML */ = {
 			isa = XCSwiftPackageProductDependency;

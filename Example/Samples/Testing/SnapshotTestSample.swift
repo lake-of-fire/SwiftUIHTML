@@ -125,7 +125,7 @@ struct SnapshotTestSample: View {
                         .foregroundColor(.secondary)
 
                     ZStack {
-                        HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                        HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                             .htmlEnvironment(\.configuration, .sample)
                             .htmlEnvironment(\.styleContainer, {
                                 var container = HTMLStyleContainer()
@@ -234,7 +234,7 @@ struct SnapshotTestSample: View {
                         .buttonStyle(.bordered)
         }
         .task(id: renderingHTML) {
-            let parsed = HTMLFuziParser().parse(html: renderingHTML)
+            let parsed = HTMLSwiftSoupParser().parse(html: renderingHTML)
             parseStatus = "Parse ok tag=\(parsed.tagName) children=\(parsed.childrenCount) (\(renderingHTML.count) chars)"
         }
     }

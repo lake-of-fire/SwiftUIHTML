@@ -51,7 +51,7 @@ struct LineHeightSample: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLFuziParser())
+                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
@@ -80,7 +80,7 @@ struct LineHeightSample: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLFuziParser())
+                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
@@ -109,7 +109,7 @@ struct LineHeightSample: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLFuziParser())
+                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()
@@ -138,7 +138,7 @@ struct LineHeightSample: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLFuziParser())
+                    HTMLView(html: "<p>\(longText)</p>", parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()

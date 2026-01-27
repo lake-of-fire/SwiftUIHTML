@@ -41,7 +41,7 @@ struct RubyTagSample: View {
 
                 Divider()
 
-                HTMLView(html: html, parser: HTMLFuziParser())
+                HTMLView(html: html, parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()

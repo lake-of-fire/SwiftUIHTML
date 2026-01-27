@@ -73,7 +73,7 @@ struct TextStyleSample: View {
                     Text("Rendering Result")
                         .font(.headline)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                         .padding()

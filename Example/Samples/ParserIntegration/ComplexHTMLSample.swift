@@ -103,7 +103,7 @@ struct ComplexHTMLSample: View {
                 Divider()
                 
                 // HTML 렌더링
-                HTMLView(html: html, parser: HTMLFuziParser())
+                HTMLView(html: html, parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, {
                         var container = HTMLStyleContainer()
@@ -142,7 +142,7 @@ struct ComplexHTMLSample: View {
                         .font(.headline)
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("1. HTML 문자열을 Fuzi로 파싱")
+                        Text("1. HTML 문자열을 SwiftSoup로 파싱")
                         Text("2. DOM 트리를 HTMLNode 구조로 변환")
                         Text("3. 각 요소의 속성과 스타일 추출")
                         Text("4. SwiftUI View 계층으로 렌더링")

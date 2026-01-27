@@ -40,7 +40,7 @@ struct SyntheticStressSample: View {
                 .background(Color.platformSystemGray6)
                 .cornerRadius(8)
 
-                HTMLView(html: syntheticHTML(sectionCount: sectionCount, includeMedia: includeMedia), parser: HTMLFuziParser())
+                HTMLView(html: syntheticHTML(sectionCount: sectionCount, includeMedia: includeMedia), parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()

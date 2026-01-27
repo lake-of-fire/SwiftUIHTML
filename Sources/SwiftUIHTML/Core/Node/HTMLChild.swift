@@ -13,15 +13,19 @@ public extension HTMLChild {
     }
 
     static func trimmingText(_ string: String) -> HTMLChild {
-        .text(string.trimmingCharacters(in: .trimmableSpaces))
-    }
-}
-
-// MARK - private
-private extension CharacterSet {
-    static var trimmableSpaces: CharacterSet {
-        CharacterSet
-            .whitespacesAndNewlines
-            .subtracting(CharacterSet(charactersIn: "\u{00A0}"))
+        if string.isEmpty {
+            return .text(string)
+        }
+        let utf8 = string.utf8
+        if let first = utf8.first, let last = utf8.last,
+           !ASCIIWhitespace.isWhitespace(first),
+           !ASCIIWhitespace.isWhitespace(last) {
+            return .text(string)
+        }
+        let trimmed = ASCIIWhitespace.trim(string)
+        if trimmed.startIndex == string.startIndex && trimmed.endIndex == string.endIndex {
+            return .text(string)
+        }
+        return .text(String(trimmed))
     }
 }

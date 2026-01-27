@@ -19,7 +19,7 @@
 - **HTML Rendering**: Convert HTML to native SwiftUI views
 - **Custom Tag System**: Extensible through BlockTag, InlineTag, and InlineAttachmentTag protocols
 - **CSS Style Support**: Full inline style support (padding, margin, background, border, etc.)
-- **Flexible Parser Integration**: Works with external parsers like Fuzi and SwiftSoup
+- **Flexible Parser Integration**: Works with external parsers like SwiftSoup and custom implementations
 - **Environment Value System**: Global configuration and style customization
 - **Profiling Hooks**: Optional signposts for HTML parsing via `SWIFTUIHTML_SIGNPOSTS=1`
 
@@ -80,7 +80,7 @@ struct ContentView: View {
         """
     
     var body: some View {
-        HTMLView(html: html, parser: HTMLFuziParser())
+        HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .default)
             .htmlEnvironment(\.styleContainer, createStyleContainer())
     }
@@ -150,7 +150,7 @@ For detailed usage and examples, please refer to the Documentation folder:
 - 📖 **[Basic Usage](Documentation/BasicUsage.md)** - HTML rendering basics
 - 🎨 **[Styling Guide](Documentation/Styling.md)** - CSS styles and configuration
 - 🔧 **[Custom Tags](Documentation/CustomTags.md)** - Creating custom tags
-- 🔌 **[Parser Integration](Documentation/ParserIntegration.md)** - Fuzi, SwiftSoup integration
+- 🔌 **[Parser Integration](Documentation/ParserIntegration.md)** - SwiftSoup and custom parser integration
 - 🚀 **[Advanced Features](Documentation/AdvancedFeatures.md)** - Environment values and advanced customization
 
 ### Quick Examples

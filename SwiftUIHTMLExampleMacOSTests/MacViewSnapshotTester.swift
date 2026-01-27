@@ -63,22 +63,30 @@ class MacViewSnapshotTester {
         name: String?
     ) -> String {
         guard let snapshotDirectory else { return testName }
-        if testName.hasSuffix("MacOS") {
-            let trimmed = String(testName.dropLast("MacOS".count))
+        let normalized = normalizeTestName(testName)
+        if normalized.hasSuffix("MacOS") {
+            let trimmed = String(normalized.dropLast("MacOS".count))
             if baselineExists(snapshotDirectory: snapshotDirectory, testName: trimmed, name: name) {
                 return trimmed
             }
         }
-        if testName.hasSuffix("macOS") {
-            let trimmed = String(testName.dropLast("macOS".count))
+        if normalized.hasSuffix("macOS") {
+            let trimmed = String(normalized.dropLast("macOS".count))
             if baselineExists(snapshotDirectory: snapshotDirectory, testName: trimmed, name: name) {
                 return trimmed
             }
         }
-        if baselineExists(snapshotDirectory: snapshotDirectory, testName: testName, name: name) {
-            return testName
+        if baselineExists(snapshotDirectory: snapshotDirectory, testName: normalized, name: name) {
+            return normalized
         }
-        return testName
+        return normalized
+    }
+
+    private static func normalizeTestName(_ raw: String) -> String {
+        if let paren = raw.firstIndex(of: "(") {
+            return String(raw[..<paren])
+        }
+        return raw
     }
 
     private static func referencePixelSize(
@@ -474,7 +482,13 @@ class MacViewSnapshotTester {
     ) async throws {
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
-        setenv("SWIFTUIHTML_USE_TEXTKIT_LAYOUT", "1", 1)
+        let requestedTextKit = ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1"
+        setenv("SWIFTUIHTML_USE_TEXTKIT_LAYOUT", requestedTextKit ? "1" : "0", 1)
+        let requestedRawOffset = ProcessInfo.processInfo.environment["SWIFTUIHTML_MACOS_USE_RAW_OFFSET"] == "1"
+        setenv("SWIFTUIHTML_MACOS_USE_RAW_OFFSET", requestedRawOffset ? "1" : "0", 1)
+        let textKitEnv = ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] ?? "nil"
+        let rawOffsetEnv = ProcessInfo.processInfo.environment["SWIFTUIHTML_MACOS_USE_RAW_OFFSET"] ?? "nil"
+        AttachmentDebugLogger.record("[Snapshot] env textKit=\(textKitEnv) rawOffset=\(rawOffsetEnv)")
         let allowHeightOverride = ProcessInfo.processInfo.environment["SWIFTUIHTML_MACOS_USE_FITTING_HEIGHT"] == "1"
         AttachmentDebugLogger.clear()
         let identifier = name ?? "1"
@@ -529,8 +543,7 @@ class MacViewSnapshotTester {
             if let height {
                 targetHeight = height
             } else {
-                let fittingSize = hostingView.fittingSize
-                targetHeight = max(1, ceil(fittingSize.height))
+                targetHeight = max(1, ceil(referenceSize.height / targetScale))
             }
             let finalSize = NSSize(width: targetWidth, height: targetHeight)
             container.setFrameSize(finalSize)
@@ -576,7 +589,7 @@ class MacViewSnapshotTester {
         try await Task.sleep(for: .milliseconds(800))
         container.layoutSubtreeIfNeeded()
         container.needsLayout = true
-        if height == nil {
+        if height == nil, referenceSize == nil {
             let fittingSize = hostingView.fittingSize
             let updatedHeight = max(1, ceil(fittingSize.height))
             if abs(updatedHeight - container.frame.height) > 1 {
@@ -594,7 +607,8 @@ class MacViewSnapshotTester {
 #if canImport(CoreAnimation)
         CATransaction.flush()
 #endif
-        logImageViewDiagnostics(in: container)
+        let attachmentCounts = await AttachmentLayoutTracker.shared.snapshotCounts()
+        logImageViewDiagnostics(in: container, attachmentCounts: attachmentCounts)
 
 
         let snapshotSize = container.frame.size
@@ -619,6 +633,12 @@ class MacViewSnapshotTester {
             )
         }
         let finalImage = image
+        writeArtifactImage(
+            finalImage,
+            testName: baselineTestName,
+            name: name,
+            filePath: filePath
+        )
         performOCRDebug(
             image: finalImage,
             testName: testName,
@@ -672,7 +692,12 @@ class MacViewSnapshotTester {
     }
 
     private static func ensureSnapshotArtifactsDirectory() {
-        if ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] != nil {
+        if let existing = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] {
+            let url = URL(fileURLWithPath: existing, isDirectory: true)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                AttachmentDebugLogger.record("[Snapshot] SNAPSHOT_ARTIFACTS=\(url.path)")
+            }
             return
         }
         let artifactsUrl = artifactsDirectory
@@ -685,8 +710,43 @@ class MacViewSnapshotTester {
         }
     }
 
+    private static func writeArtifactImage(
+        _ image: NSImage,
+        testName: String,
+        name: String?,
+        filePath: StaticString
+    ) {
+        guard let root = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] else { return }
+        let fileURL = URL(fileURLWithPath: "\(filePath)", isDirectory: false)
+        let group = sanitizePathComponent(fileURL.deletingPathExtension().lastPathComponent)
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+        let artifactDir = URL(fileURLWithPath: root, isDirectory: true)
+            .appendingPathComponent(group)
+        let pngURL = artifactDir
+            .appendingPathComponent("\(safeTestName).\(identifier)")
+            .appendingPathExtension("png")
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else {
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: artifactDir,
+                withIntermediateDirectories: true
+            )
+            try png.write(to: pngURL)
+        } catch {
+            AttachmentDebugLogger.record("[Snapshot] artifact write failed \(error.localizedDescription)")
+        }
+    }
 
-    private static func logImageViewDiagnostics(in rootView: NSView) {
+
+    private static func logImageViewDiagnostics(
+        in rootView: NSView,
+        attachmentCounts: AttachmentLayoutTracker.AttachmentCounts?
+    ) {
         let imageViews = allDescendants(of: rootView).compactMap { $0 as? NSImageView }
         let visibleImages = imageViews.filter { view in
             guard let image = view.image else { return false }
@@ -696,7 +756,24 @@ class MacViewSnapshotTester {
         let layeredViews = allDescendants(of: rootView).filter { $0.layer?.contents != nil }
         let layerContentsCount = layerContentsTotal(in: rootView.layer)
         let layerImageHashes = layerContentsHashes(in: rootView.layer)
-        AttachmentDebugLogger.record("[Snapshot] imageViews total=\(imageViews.count) visible=\(visibleImages.count) layerContents=\(layeredViews.count) layerTreeContents=\(layerContentsCount) layerImageHashes=\(layerImageHashes.count)")
+        if let attachmentCounts {
+            AttachmentDebugLogger.record(
+                "[Snapshot] imageViews total=\(imageViews.count) visible=\(visibleImages.count) layerContents=\(layeredViews.count) layerTreeContents=\(layerContentsCount) layerImageHashes=\(layerImageHashes.count) expectedAttachments=\(attachmentCounts.expected) expectedImages=\(attachmentCounts.expectedImages) prepared=\(attachmentCounts.prepared) uniqueKeys=\(attachmentCounts.uniqueKeys)"
+            )
+        } else {
+            AttachmentDebugLogger.record(
+                "[Snapshot] imageViews total=\(imageViews.count) visible=\(visibleImages.count) layerContents=\(layeredViews.count) layerTreeContents=\(layerContentsCount) layerImageHashes=\(layerImageHashes.count)"
+            )
+        }
+        if let attachmentCounts, attachmentCounts.expectedImages > 0 {
+            if layerContentsCount == 0 {
+                AttachmentDebugLogger.record("[Snapshot][Heuristic] no layer contents but expectedImages=\(attachmentCounts.expectedImages)")
+            } else if layerImageHashes.count > 0 && layerImageHashes.count < attachmentCounts.expectedImages {
+                AttachmentDebugLogger.record(
+                    "[Snapshot][Heuristic] layerImageHashes (\(layerImageHashes.count)) < expectedImages (\(attachmentCounts.expectedImages))"
+                )
+            }
+        }
         guard !visibleImages.isEmpty else {
             AttachmentDebugLogger.record("[Snapshot][Heuristic] no visible NSImageView instances (attachments may not be rendering)")
             return
@@ -706,6 +783,19 @@ class MacViewSnapshotTester {
         }
         let summary = frames.map { "\($0.integral)" }.joined(separator: " | ")
         AttachmentDebugLogger.record("[Snapshot] imageViewFrames \(summary)")
+        if !frames.isEmpty {
+            let frameKeys = frames.map { "\($0.integral)" }
+            let frameCounts = frameKeys.reduce(into: [String: Int]()) { counts, key in
+                counts[key, default: 0] += 1
+            }
+            let uniqueFrames = frameCounts.count
+            if let maxFrameDup = frameCounts.max(by: { $0.value < $1.value }) {
+                AttachmentDebugLogger.record("[Snapshot] imageFrameDuplicates total=\(frames.count) unique=\(uniqueFrames) maxDup=\(maxFrameDup.value) sample=\(maxFrameDup.key)")
+                if maxFrameDup.value > 1 && uniqueFrames <= max(1, frames.count / 2) {
+                    AttachmentDebugLogger.record("[Snapshot][Heuristic] many images share the same frame (possible stacking or offset bug)")
+                }
+            }
+        }
 
         let hashes: [String] = visibleImages.compactMap { view -> String? in
             guard let image = view.image else { return nil }
@@ -721,6 +811,9 @@ class MacViewSnapshotTester {
             AttachmentDebugLogger.record("[Snapshot] imageHashes total=\(hashes.count) unique=\(uniqueCount) maxDup=\(maxDup.value) sample=\(maxDup.key)")
             if maxDup.value > 1 && uniqueCount == 1 {
                 AttachmentDebugLogger.record("[Snapshot][Heuristic] all images identical (possible stacking or reuse bug)")
+            }
+            if uniqueCount > 1 && uniqueCount <= max(1, hashes.count / 2) {
+                AttachmentDebugLogger.record("[Snapshot][Heuristic] many images are duplicates (possible missing or repeated image bug)")
             }
         }
     }

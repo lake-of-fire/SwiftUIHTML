@@ -62,10 +62,16 @@ internal extension PlatformImage {
         if size == .zero {
             return PlatformImage()
         }
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { _ in }
+        UIGraphicsBeginImageContextWithOptions(size, false, 1)
+        guard let context = UIGraphicsGetCurrentContext() else {
+            UIGraphicsEndImageContext()
+            return PlatformImage()
+        }
+        context.setFillColor(UIColor.clear.cgColor)
+        context.fill(CGRect(origin: .zero, size: size))
+        let image = UIGraphicsGetImageFromCurrentImageContext() ?? PlatformImage()
+        UIGraphicsEndImageContext()
+        return image
 #endif
     }
 }

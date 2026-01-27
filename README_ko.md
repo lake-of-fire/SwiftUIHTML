@@ -19,7 +19,7 @@
 - **HTML 렌더링**: SwiftUI 환경에서 HTML을 네이티브 뷰로 변환
 - **커스텀 태그 시스템**: BlockTag, InlineTag, InlineAttachmentTag 프로토콜로 자유로운 확장
 - **CSS 스타일 지원**: 인라인 스타일(padding, margin, background, border 등) 완벽 지원
-- **유연한 파서 통합**: Fuzi, SwiftSoup 등 외부 파서 라이브러리와 연동
+- **유연한 파서 통합**: SwiftSoup 및 커스텀 파서와 연동
 - **환경 값 시스템**: 전역 설정 관리 및 스타일 커스터마이징
 - **프로파일링 훅**: `SWIFTUIHTML_SIGNPOSTS=1` 설정 시 HTML 파싱 구간 signpost 출력
 
@@ -80,7 +80,7 @@ struct ContentView: View {
         """
     
     var body: some View {
-        HTMLView(html: html, parser: HTMLFuziParser())
+        HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .default)
             .htmlEnvironment(\.styleContainer, createStyleContainer())
     }
@@ -150,7 +150,7 @@ struct MyHTMLParser: HTMLParserable {
 - 📖 **[기본 사용법](Documentation/BasicUsage.md)** - HTML 렌더링 기초
 - 🎨 **[스타일링 가이드](Documentation/Styling.md)** - CSS 스타일과 설정
 - 🔧 **[커스텀 태그](Documentation/CustomTags.md)** - 커스텀 태그 만들기
-- 🔌 **[파서 통합](Documentation/ParserIntegration.md)** - Fuzi, SwiftSoup 연동
+- 🔌 **[파서 통합](Documentation/ParserIntegration.md)** - SwiftSoup 및 커스텀 파서 연동
 - 🚀 **[고급 기능](Documentation/AdvancedFeatures.md)** - 환경값과 고급 커스터마이징
 
 ### 빠른 예제

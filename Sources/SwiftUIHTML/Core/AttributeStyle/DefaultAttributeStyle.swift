@@ -33,7 +33,9 @@ public struct DefaultAttributeStyler: AttributeStyleable {
             styleContainer.uiFont = newFont
         }
 
-        if let lineHeight = cssStyle["line-height"]?.cgFloat, let font = styleContainer.uiFont {
+        if let rawLineHeight = cssStyle["line-height"]?.string,
+           let font = styleContainer.uiFont,
+           let lineHeight = resolveLineHeight(rawLineHeight, font: font) {
             styleContainer.textLine = .lineHeight(font: font, lineHeight: lineHeight)
         } else if let lineSpacing = cssStyle["line-spacing"]?.cgFloat {
             styleContainer.textLine = .lineSpacing(spacing: lineSpacing)
@@ -50,4 +52,29 @@ public struct DefaultAttributeStyler: AttributeStyleable {
             }
         }
     }
+}
+
+private func resolveLineHeight(_ rawValue: String, font: PlatformFont) -> CGFloat? {
+    let trimmed = ASCIIWhitespace.trim(rawValue)
+    guard !trimmed.isEmpty else { return nil }
+    let value = String(trimmed)
+    let lowered = value.lowercased()
+
+    if lowered == "normal" || lowered == "inherit" || lowered == "initial" || lowered == "unset" {
+        return font.manabiLineHeight
+    }
+
+    if lowered.hasSuffix("px")
+        || lowered.hasSuffix("pt")
+        || lowered.hasSuffix("em")
+        || lowered.hasSuffix("rem")
+        || lowered.hasSuffix("%") {
+        return CSSFontUtility.parseSize(fromFontSize: value, baseSize: font.pointSize)
+    }
+
+    if let multiplier = Double(lowered) {
+        return font.pointSize * CGFloat(multiplier)
+    }
+
+    return nil
 }

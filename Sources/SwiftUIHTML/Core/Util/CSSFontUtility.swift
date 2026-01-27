@@ -30,35 +30,38 @@ public enum CSSFontUtility {
             return baseSize
         }
 
-        let trimmed = fontSizeString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = ASCIIWhitespace.trim(fontSizeString)
+        if trimmed.isEmpty {
+            return baseSize
+        }
+        let trimmedString = String(trimmed)
 
         // 다양한 단위 처리
-        if trimmed.hasSuffix("px") {
-            if let value = Double(trimmed.dropLast(2)) {
+        if trimmedString.hasSuffix("px") {
+            if let value = Double(trimmedString.dropLast(2)) {
                 return CGFloat(value)
             }
-        } else if trimmed.hasSuffix("pt") {
-            if let value = Double(trimmed.dropLast(2)) {
+        } else if trimmedString.hasSuffix("pt") {
+            if let value = Double(trimmedString.dropLast(2)) {
                 return CGFloat(value)
             }
-        } else if trimmed.hasSuffix("rem") {
-            if let value = Double(trimmed.dropLast(3)) {
+        } else if trimmedString.hasSuffix("rem") {
+            if let value = Double(trimmedString.dropLast(3)) {
                 return baseSize * CGFloat(value)
             }
-        } else if trimmed.hasSuffix("em") {
-            if let value = Double(trimmed.dropLast(2)) {
+        } else if trimmedString.hasSuffix("em") {
+            if let value = Double(trimmedString.dropLast(2)) {
                 return baseSize * CGFloat(value)
             }
-        } else if trimmed.hasSuffix("%") {
-            if let value = Double(trimmed.dropLast(1)) {
+        } else if trimmedString.hasSuffix("%") {
+            if let value = Double(trimmedString.dropLast(1)) {
                 return baseSize * CGFloat(value / 100)
             }
-        } else if let value = Double(trimmed) {
+        } else if let value = Double(trimmedString) {
             return CGFloat(value)
         }
 
-        // 키워드 기반 크기
-        switch trimmed.lowercased() {
+        switch trimmedString.lowercased() {
         case "xx-small": return baseSize * 0.6
         case "x-small": return baseSize * 0.75
         case "small": return baseSize * 0.889
@@ -119,14 +122,17 @@ public enum CSSFontUtility {
     // MARK: - Private Helper Methods
 
     private static func parseFontFamilyString(_ fontFamilyString: String) -> [String] {
-        return fontFamilyString
-            .components(separatedBy: ",")
-            .map {
-                $0.trimmingCharacters(in: .whitespacesAndNewlines)
-                  .replacingOccurrences(of: "\"", with: "")
-                  .replacingOccurrences(of: "'", with: "")
-            }
-            .filter { !$0.isEmpty }
+        let parts = splitByComma(fontFamilyString)
+        var results: [String] = []
+        results.reserveCapacity(parts.count)
+
+        for part in parts {
+            let trimmed = trimASCIIAndQuotes(part)
+            guard !trimmed.isEmpty else { continue }
+            results.append(String(trimmed))
+        }
+
+        return results
     }
 
     private static func createFontWithFallbacks(fontNames: [String], size: CGFloat) -> PlatformFont {
@@ -229,12 +235,12 @@ public enum CSSFontUtility {
         // font: [font-style] [font-variant] [font-weight] [font-size/line-height] [font-family]
         // 예: "italic bold 16px/2 Arial, sans-serif"
 
-        let components = fontString.components(separatedBy: .whitespaces)
+        let components = splitByASCIIWhitespace(fontString)
 
         // 마지막 요소가 폰트 패밀리 (쉼표로 구분된 목록일 수 있음)
         var familyStartIndex = -1
         for (index, component) in components.enumerated().reversed() {
-            if component.contains(",") || isGenericFontFamily(component) {
+            if containsCommaASCII(component) || isGenericFontFamily(String(component)) {
                 familyStartIndex = index
                 break
             }
@@ -243,21 +249,132 @@ public enum CSSFontUtility {
         // 폰트 패밀리 조합
         var fontFamily: String? = nil
         if familyStartIndex >= 0 {
-            fontFamily = components[familyStartIndex...].joined(separator: " ")
+            fontFamily = components[familyStartIndex...].map(String.init).joined(separator: " ")
         }
 
         // 폰트 사이즈 찾기 (px, pt, em, rem, % 등으로 끝나는 요소)
         var fontSize: String? = nil
         for component in components {
-            if component.hasSuffix("px") || component.hasSuffix("pt") ||
-               component.hasSuffix("em") || component.hasSuffix("rem") ||
-               component.hasSuffix("%") ||
-               ["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large", "smaller", "larger"].contains(component.lowercased()) {
-                fontSize = component.split(separator: "/").first.map(String.init) // line-height 제거
+            let componentString = String(component)
+            if componentString.hasSuffix("px") || componentString.hasSuffix("pt") ||
+               componentString.hasSuffix("em") || componentString.hasSuffix("rem") ||
+               componentString.hasSuffix("%") ||
+               ["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large", "smaller", "larger"].contains(componentString.lowercased()) {
+                let sizeSlice = prefixBeforeSlash(component)
+                fontSize = String(sizeSlice) // line-height 제거
                 break
             }
         }
 
         return (fontSize, fontFamily)
+    }
+}
+
+private extension CSSFontUtility {
+    static func splitByComma(_ value: String) -> [Substring] {
+        let utf8 = value.utf8
+        var results: [Substring] = []
+        results.reserveCapacity(4)
+
+        var start = utf8.startIndex
+        var index = start
+        while index < utf8.endIndex {
+            if utf8[index] == 0x2C { // ","
+                let startIndex = String.Index(start, within: value) ?? value.startIndex
+                let endIndex = String.Index(index, within: value) ?? value.endIndex
+                results.append(value[startIndex..<endIndex])
+                start = utf8.index(after: index)
+            }
+            index = utf8.index(after: index)
+        }
+
+        if start <= utf8.endIndex {
+            let startIndex = String.Index(start, within: value) ?? value.startIndex
+            let endIndex = value.endIndex
+            results.append(value[startIndex..<endIndex])
+        }
+
+        return results
+    }
+
+    static func splitByASCIIWhitespace(_ value: String) -> [Substring] {
+        let utf8 = value.utf8
+        var results: [Substring] = []
+        results.reserveCapacity(8)
+
+        var start = utf8.startIndex
+        var index = start
+        var inToken = false
+
+        while index < utf8.endIndex {
+            let byte = utf8[index]
+            if ASCIIWhitespace.isWhitespace(byte) {
+                if inToken {
+                    let startIndex = String.Index(start, within: value) ?? value.startIndex
+                    let endIndex = String.Index(index, within: value) ?? value.endIndex
+                    results.append(value[startIndex..<endIndex])
+                    inToken = false
+                }
+                index = utf8.index(after: index)
+                start = index
+                continue
+            }
+            if !inToken {
+                start = index
+                inToken = true
+            }
+            index = utf8.index(after: index)
+        }
+
+        if inToken {
+            let startIndex = String.Index(start, within: value) ?? value.startIndex
+            results.append(value[startIndex..<value.endIndex])
+        }
+
+        return results
+    }
+
+    static func trimASCIIAndQuotes(_ value: Substring) -> Substring {
+        let trimmed = ASCIIWhitespace.trim(value)
+        let utf8 = trimmed.utf8
+        guard !utf8.isEmpty else { return trimmed }
+
+        var start = utf8.startIndex
+        var end = utf8.endIndex
+
+        let first = utf8[start]
+        if first == 0x22 || first == 0x27 { // " or '
+            start = utf8.index(after: start)
+        }
+
+        if end > start {
+            let before = utf8.index(before: end)
+            let last = utf8[before]
+            if last == 0x22 || last == 0x27 {
+                end = before
+            }
+        }
+
+        let startIndex = String.Index(start, within: trimmed) ?? trimmed.startIndex
+        let endIndex = String.Index(end, within: trimmed) ?? trimmed.endIndex
+        return trimmed[startIndex..<endIndex]
+    }
+
+    static func containsCommaASCII(_ value: Substring) -> Bool {
+        for byte in value.utf8 {
+            if byte == 0x2C {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func prefixBeforeSlash(_ value: Substring) -> Substring {
+        let utf8 = value.utf8
+        if let slashIndex = utf8.firstIndex(of: 0x2F) { // "/"
+            let endIndex = String.Index(slashIndex, within: value) ?? value.endIndex
+            return value[value.startIndex..<endIndex]
+        }
+        return value
     }
 }

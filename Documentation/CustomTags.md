@@ -386,7 +386,7 @@ struct ContentView: View {
     
     var body: some View {
         ScrollView {
-            HTMLView(html: html, parser: HTMLFuziParser())
+            HTMLView(html: html, parser: HTMLSwiftSoupParser())
                 .htmlEnvironment(\.configuration, customConfiguration())
                 .padding()
         }

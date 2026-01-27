@@ -49,7 +49,7 @@ class HTMLBasicTests {
             <p>&copy; 2025 Basic HTML Test Page</p>
         </footer>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 375)
@@ -79,7 +79,7 @@ class HTMLBasicTests {
         외관과 실내 컨디션이 깔끔한 차량입니다.
         파노라믹 글라스 루프가 적용되어 개방감 있는 가능합니다.</p>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 233, alignment: .leading)
@@ -141,7 +141,7 @@ class HTMLBasicTests {
             <p>&copy; 2025 HTML Nesting Test Page</p>
         </footer>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: width)
@@ -164,7 +164,7 @@ class HTMLBasicTests {
         <span style="font-family: 'SpoqaHanSansNeo-Regular'"> 가나다라ja12 <img src="https://picsum.photos/id/237/12/12" width="12" height="12" > </span>
         </p>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byCharWrapping))
             .frame(width: 375)
@@ -226,7 +226,7 @@ class HTMLBasicTests {
             <p>&copy; 2025 Basic HTML Test Page</p>
         </footer>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 375)
@@ -258,7 +258,7 @@ class HTMLBasicTests {
         <p>Consecutive images: <img src="https://picsum.photos/id/102/16/16" width="16" height="16" /><img src="https://picsum.photos/id/104/20/20" width="20" height="20" /><img src="https://picsum.photos/id/106/24/24" width="24" height="24" /> positioned adjacently like this.</p>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
@@ -288,7 +288,7 @@ class HTMLBasicTests {
         Thisishowaverylongtextwithconsecutiveimageswillbehaveinlinebreakingscenarios.</p>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byCharWrapping))
             .frame(width: 350)
@@ -315,7 +315,7 @@ class HTMLBasicTests {
         verylongEnglishwordsthatwillneedtobreakacrosslinesexample with <img src="https://picsum.photos/id/102/16/16" width="16" height="16" /> images included in the middle.</p>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 280)
@@ -355,7 +355,7 @@ class HTMLBasicTests {
         </section>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
@@ -463,7 +463,7 @@ class HTMLBasicTests {
         </body>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
@@ -484,20 +484,6 @@ class HTMLBasicTests {
                 <span class="yomitan-reading" style="margin-left: 4">[ばめん]</span>
             </div>
             <div class="yomitan-dictionary-title" style="margin-bottom: 4">JMdict [2026-01-17]</div>
-            <div class="yomitan-ruby-samples" style="margin-bottom: 6">
-                <p style="margin: 0 0 4px 0;">Ruby samples:</p>
-                <p style="margin: 0 0 4px 0;">
-                    <ruby>漢字<rt>かんじ</rt></ruby>を読む
-                    <ruby>今日<rt>きょう</rt></ruby>は晴れ
-                </p>
-                <p style="margin: 0 0 4px 0;">
-                    Mixed <ruby>東京<rt>とうきょう</rt></ruby> text and
-                    <ruby>学校<rt>がっこう</rt></ruby>です
-                </p>
-                <p style="margin: 0;">
-                    Inline<ruby>日本語<rt>にほんご</rt></ruby>ruby test
-                </p>
-            </div>
             <div class="yomitan-glossary">
                 <div class="yomitan-glossary-item" style="margin-bottom: 4">
                     <ul lang="en" data-content="glossary" style="list-style-type:circle;">
@@ -512,7 +498,7 @@ class HTMLBasicTests {
         </div>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 320)
@@ -532,17 +518,21 @@ class HTMLBasicTests {
         <div style="font-size: 26px; line-height: 1.5;">
             <p style="margin: 0 0 8px 0; font-weight: 600;">Ruby annotation demo</p>
             <p style="margin: 0 0 10px 0;">
-                <ruby ruby-annotation-font-size="14" ruby-scale="0.72" ruby-color="#1b5e20">漢字<rt>かんじ</rt></ruby>
+                <ruby style="ruby-position: over;">
+                    漢字<rt style="font-size: 0.6em; color: #1b5e20;">かんじ</rt>
+                </ruby>
                 を読む
             </p>
             <p style="margin: 0;">
-                <ruby ruby-annotation-font-size="12" ruby-position="after" ruby-color="#0d47a1">東京<rt>とうきょう</rt></ruby>
+                <ruby style="ruby-position: under;">
+                    東京<rt style="font-size: 0.55em; color: #0d47a1;">とうきょう</rt>
+                </ruby>
                 <span style="font-size: 20px;">travel</span>
             </p>
         </div>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 320)
@@ -568,15 +558,15 @@ class HTMLBasicTests {
         <div style="font-size: 22px; line-height: 1.5;">
             <p style="margin: 0 0 8px 0;">Ruby annotation vanilla</p>
             <p style="margin: 0 0 8px 0;">
-                漢字<ruby>漢字<rt>かんじ</rt></ruby>を読む
+                <ruby>漢字<rt>かんじ</rt></ruby>を読む
             </p>
             <p style="margin: 0;">
-                東京<ruby>東京<rt>とうきょう</rt></ruby>travel
+                <ruby>東京<rt>とうきょう</rt></ruby>travel
             </p>
         </div>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 320)

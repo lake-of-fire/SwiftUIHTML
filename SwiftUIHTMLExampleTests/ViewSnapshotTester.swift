@@ -33,7 +33,8 @@ class ViewSnapshotTester {
         AttachmentDebugLogger.clear()
         AttachmentDebugLogger.record("[TestHarness] snapshot start: \(testName)")
         let rootView = view.background(Color.white).compositingGroup().ignoresSafeArea()
-        let hostingView = UIHostingController(rootView: rootView).view!
+        let hostingController = UIHostingController(rootView: rootView)
+        let hostingView = hostingController.view!
 
         let viewController = UIViewController()
         viewController.view.addSubview(hostingView)
@@ -55,6 +56,10 @@ class ViewSnapshotTester {
             hostingView.invalidateIntrinsicContentSize()
         }
 
+        let resolvedSize = resolvedSize(for: hostingController, fallbackView: hostingView)
+        AttachmentDebugLogger.record("[Snapshot] resolvedSize=\(resolvedSize)")
+        viewController.view.layoutIfNeeded()
+
         guard let renderedView = findActualRenderedView(in: hostingView) else {
             throw SnapshotError.viewNotFound
         }
@@ -66,8 +71,11 @@ class ViewSnapshotTester {
         AttachmentDebugLogger.record("[Snapshot] layoutIdle=\(waitLayout)")
         logImageViewDiagnostics(in: hostingView)
 
-        let scale = UIScreen.main.scale
-        let image = makeSnapshotImage(of: renderedView, scale: scale)
+        let snapshotting = Snapshotting<AnyView, UIImage>.image
+        let image = await snapshotImage(
+            of: AnyView(rootView),
+            snapshotting: snapshotting
+        )
         writeSnapshotArtifact(
             image: image,
             testName: testName,
@@ -83,8 +91,8 @@ class ViewSnapshotTester {
         )
         ensureSnapshotArtifactsDirectory(filePath: filePath)
         let failure = verifySnapshot(
-            of: renderedView,
-            as: .image,
+            of: AnyView(rootView),
+            as: snapshotting,
             named: name,
             record: recording,
             fileID: fileID,
@@ -113,8 +121,10 @@ class ViewSnapshotTester {
     
     /// Find actual rendered view 
     private static func findActualRenderedView(in hostingView: UIView) -> UIView? {
-        // Always render the hosting view, then crop to content bounds.
-        hostingView
+        if let contentView = hostingView.subviews.first {
+            return contentView
+        }
+        return hostingView
     }
 
     private static func makeSnapshotImage(of view: UIView, scale: CGFloat) -> UIImage {
@@ -126,12 +136,12 @@ class ViewSnapshotTester {
         format.scale = scale
         format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        var image = renderer.image { ctx in
-            view.layer.render(in: ctx.cgContext)
+        var image = renderer.image { _ in
+            view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
         }
         if image.cgImage == nil {
-            image = renderer.image { _ in
-                view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+            image = renderer.image { ctx in
+                view.layer.render(in: ctx.cgContext)
             }
         }
         if image.cgImage != nil {
@@ -145,6 +155,20 @@ class ViewSnapshotTester {
         }
         print("Snapshot image missing CGImage. size=\(size) scale=\(scale)")
         return image
+    }
+
+    private static func snapshotImage<V: View>(
+        of view: V,
+        snapshotting: Snapshotting<V, UIImage>
+    ) async -> UIImage {
+        let expectation = XCTestExpectation(description: "snapshot image")
+        var result = UIImage()
+        snapshotting.snapshot(view).run { image in
+            result = image
+            expectation.fulfill()
+        }
+        _ = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
+        return result
     }
 
     private static func contentBounds(in rootView: UIView) -> CGRect {
@@ -211,6 +235,19 @@ class ViewSnapshotTester {
         }
         let summary = frames.map { "\($0.integral)" }.joined(separator: " | ")
         AttachmentDebugLogger.record("[Snapshot] imageViewFrames \(summary)")
+        if !frames.isEmpty {
+            let frameKeys = frames.map { "\($0.integral)" }
+            let frameCounts = frameKeys.reduce(into: [String: Int]()) { counts, key in
+                counts[key, default: 0] += 1
+            }
+            let uniqueFrames = frameCounts.count
+            if let maxFrameDup = frameCounts.max(by: { $0.value < $1.value }) {
+                AttachmentDebugLogger.record("[Snapshot] imageFrameDuplicates total=\(frames.count) unique=\(uniqueFrames) maxDup=\(maxFrameDup.value) sample=\(maxFrameDup.key)")
+                if maxFrameDup.value > 1 && uniqueFrames <= max(1, frames.count / 2) {
+                    AttachmentDebugLogger.record("[Snapshot][Heuristic] many images share the same frame (possible stacking or offset bug)")
+                }
+            }
+        }
 
         let hashes: [String] = visibleImages.compactMap { view in
             guard let image = view.image else { return nil }
@@ -226,6 +263,9 @@ class ViewSnapshotTester {
             AttachmentDebugLogger.record("[Snapshot] imageHashes total=\(hashes.count) unique=\(uniqueCount) maxDup=\(maxDup.value) sample=\(maxDup.key)")
             if maxDup.value > 1 && uniqueCount == 1 {
                 AttachmentDebugLogger.record("[Snapshot][Heuristic] all images identical (possible stacking or reuse bug)")
+            }
+            if uniqueCount > 1 && uniqueCount <= max(1, hashes.count / 2) {
+                AttachmentDebugLogger.record("[Snapshot][Heuristic] many images are duplicates (possible missing or repeated image bug)")
             }
         }
     }

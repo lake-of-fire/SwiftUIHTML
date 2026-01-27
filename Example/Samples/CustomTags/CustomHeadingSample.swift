@@ -38,7 +38,7 @@ struct CustomHeadingSample: View {
                 Divider()
                 
                 // HTML Rendering
-                HTMLView(html: html, parser: HTMLFuziParser())
+                HTMLView(html: html, parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()

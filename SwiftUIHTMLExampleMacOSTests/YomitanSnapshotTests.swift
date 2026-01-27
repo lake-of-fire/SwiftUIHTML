@@ -51,7 +51,7 @@ struct HTMLBasicMacOSTests {
             <p>&copy; 2025 Basic HTML Test Page</p>
         </footer>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 375)
@@ -82,7 +82,7 @@ struct HTMLBasicMacOSTests {
         외관과 실내 컨디션이 깔끔한 차량입니다.
         파노라믹 글라스 루프가 적용되어 개방감 있는 가능합니다.</p>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 233, alignment: .leading)
@@ -146,7 +146,7 @@ struct HTMLBasicMacOSTests {
             <p>&copy; 2025 HTML Nesting Test Page</p>
         </footer>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: width)
@@ -171,7 +171,7 @@ struct HTMLBasicMacOSTests {
         <span style="font-family: 'SpoqaHanSansNeo-Regular'"> 가나다라ja12 <img src="https://picsum.photos/id/237/12/12" width="12" height="12" > </span>
         </p>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byCharWrapping))
             .frame(width: 375)
@@ -234,7 +234,7 @@ struct HTMLBasicMacOSTests {
             <p>&copy; 2025 Basic HTML Test Page</p>
         </footer>
         """
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 375)
@@ -268,7 +268,7 @@ struct HTMLBasicMacOSTests {
         <p>Consecutive images: <img src="https://picsum.photos/id/102/16/16" width="16" height="16" /><img src="https://picsum.photos/id/104/20/20" width="20" height="20" /><img src="https://picsum.photos/id/106/24/24" width="24" height="24" /> positioned adjacently like this.</p>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
@@ -300,7 +300,7 @@ struct HTMLBasicMacOSTests {
         Thisishowaverylongtextwithconsecutiveimageswillbehaveinlinebreakingscenarios.</p>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byCharWrapping))
             .frame(width: 350)
@@ -329,7 +329,7 @@ struct HTMLBasicMacOSTests {
         verylongEnglishwordsthatwillneedtobreakacrosslinesexample with <img src="https://picsum.photos/id/102/16/16" width="16" height="16" /> images included in the middle.</p>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode))
             .frame(width: 280)
@@ -370,7 +370,7 @@ struct HTMLBasicMacOSTests {
         </section>
         """
         
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
@@ -480,7 +480,7 @@ struct HTMLBasicMacOSTests {
         </body>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
@@ -503,20 +503,6 @@ struct HTMLBasicMacOSTests {
                 <span class="yomitan-reading" style="margin-left: 4">[ばめん]</span>
             </div>
             <div class="yomitan-dictionary-title" style="margin-bottom: 4">JMdict [2026-01-17]</div>
-            <div class="yomitan-ruby-samples" style="margin-bottom: 6">
-                <p style="margin: 0 0 4px 0;">Ruby samples:</p>
-                <p style="margin: 0 0 4px 0;">
-                    <ruby>漢字<rt>かんじ</rt></ruby>を読む
-                    <ruby>今日<rt>きょう</rt></ruby>は晴れ
-                </p>
-                <p style="margin: 0 0 4px 0;">
-                    Mixed <ruby>東京<rt>とうきょう</rt></ruby> text and
-                    <ruby>学校<rt>がっこう</rt></ruby>です
-                </p>
-                <p style="margin: 0;">
-                    Inline<ruby>日本語<rt>にほんご</rt></ruby>ruby test
-                </p>
-            </div>
             <div class="yomitan-glossary">
                 <div class="yomitan-glossary-item" style="margin-bottom: 4">
                     <ul lang="en" data-content="glossary" style="list-style-type:circle;">
@@ -531,7 +517,7 @@ struct HTMLBasicMacOSTests {
         </div>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 320)
@@ -549,33 +535,86 @@ struct HTMLBasicMacOSTests {
     @MainActor
     @Test("Ruby annotation snapshot (macOS)")
     func testRubyAnnotationSnapshotMacOS() async throws {
+        setenv("SNAPSHOT_ARTIFACTS", "/private/tmp/swiftuihtml-macos-artifacts-current", 1)
         let html = """
         <div style="font-size: 26px; line-height: 1.5;">
             <p style="margin: 0 0 8px 0; font-weight: 600;">Ruby annotation demo</p>
             <p style="margin: 0 0 10px 0;">
-                <ruby ruby-annotation-font-size="14" ruby-scale="0.72" ruby-color="#1b5e20">漢字<rt>かんじ</rt></ruby>
+                <ruby style="ruby-position: over;">
+                    漢字<rt style="font-size: 0.6em; color: #1b5e20;">かんじ</rt>
+                </ruby>
                 を読む
             </p>
             <p style="margin: 0;">
-                <ruby ruby-annotation-font-size="12" ruby-position="after" ruby-color="#0d47a1">東京<rt>とうきょう</rt></ruby>
+                <ruby style="ruby-position: under;">
+                    東京<rt style="font-size: 0.55em; color: #0d47a1;">とうきょう</rt>
+                </ruby>
                 <span style="font-size: 20px;">travel</span>
             </p>
         </div>
         """
 
-        let view = HTMLView(html: html, parser: HTMLFuziParser())
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 320)
             .fixedSize(horizontal: false, vertical: true)
 
+        writeHTMLArtifact(
+            html,
+            testName: "testRubyAnnotationSnapshot",
+            name: "rubyAnnotation"
+        )
         try await MacViewSnapshotTester.snapshot(
             of: view,
             width: 320,
             named: "rubyAnnotation",
             snapshotDirectory: iosSnapshotDirectory,
-            sleep: .seconds(2)
+            sleep: .seconds(2),
+            testName: "testRubyAnnotationSnapshot"
         )
     }
+}
+
+private func writeHTMLArtifact(_ html: String, testName: String, name: String) {
+    let root: String
+    if let existing = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] {
+        root = existing
+    } else {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let stamp = formatter.string(from: Date())
+        root = "/tmp/swiftuihtml-macos-artifacts-\(stamp)"
+        setenv("SNAPSHOT_ARTIFACTS", root, 1)
+    }
+    let safeTestName = sanitizeSnapshotComponent(testName)
+    let safeName = sanitizeSnapshotComponent(name)
+    let artifactDir = URL(fileURLWithPath: root, isDirectory: true)
+        .appendingPathComponent("YomitanSnapshotTests")
+    let htmlURL = artifactDir
+        .appendingPathComponent("\(safeTestName).\(safeName)")
+        .appendingPathExtension("html")
+    do {
+        try FileManager.default.createDirectory(
+            at: artifactDir,
+            withIntermediateDirectories: true
+        )
+        try html.write(to: htmlURL, atomically: true, encoding: .utf8)
+    } catch {
+        AttachmentDebugLogger.record("[Snapshot] html artifact write failed \(error.localizedDescription)")
+    }
+}
+
+private func sanitizeSnapshotComponent(_ string: String) -> String {
+    let sanitized = string.replacingOccurrences(
+        of: "\\W+",
+        with: "-",
+        options: .regularExpression
+    )
+    return sanitized.replacingOccurrences(
+        of: "^-|-$",
+        with: "",
+        options: .regularExpression
+    )
 }
 #endif

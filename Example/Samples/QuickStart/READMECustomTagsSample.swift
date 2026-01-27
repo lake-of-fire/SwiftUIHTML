@@ -48,7 +48,7 @@ struct READMECustomTagsSample: View {
                     Text("Rendering Result")
                         .font(.headline)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample) // configuration with custom tags registered
                         .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                         .padding()

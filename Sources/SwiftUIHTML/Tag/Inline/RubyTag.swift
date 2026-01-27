@@ -28,6 +28,10 @@ public struct RubyTag: InlineAttachmentTag {
 }
 
 private extension RubyTag {
+    var cssStyle: CSSStyle {
+        attributes["style"]?.cssStyle ?? .empty
+    }
+
     var baseText: String {
         attributes["ruby-base"]?.string ?? ""
     }
@@ -37,7 +41,11 @@ private extension RubyTag {
     }
 
     var rubyPosition: CTRubyPosition {
-        switch attributes["ruby-position"]?.string {
+        let raw = attributes["ruby-position"]?.string ?? cssStyle["ruby-position"]?.string
+        switch raw {
+        case "over": return .before
+        case "under": return .after
+        case "inter-character": return .interCharacter
         case "after": return .after
         case "before": return .before
         case "interCharacter": return .interCharacter
@@ -47,12 +55,17 @@ private extension RubyTag {
     }
 
     var rubyScale: CGFloat {
-        attributes["ruby-scale"]?.cgFloat ?? 0.58
+        if let explicit = attributes["ruby-scale"]?.cgFloat {
+            return explicit
+        }
+        if attributes["ruby-annotation-font-size"] != nil || attributes["ruby-annotation-font-name"] != nil {
+            return 1.0
+        }
+        return 0.58
     }
 
     var foregroundColor: Color? {
-        if let cssStyle = attributes["style"]?.cssStyle,
-           let color = cssStyle["color"]?.toColor() {
+        if let color = cssStyle["color"]?.toColor() {
             return color
         }
         if let color = attributes["ruby-color"]?.toColor() {
@@ -70,7 +83,6 @@ private extension RubyTag {
             return PlatformFont.systemFont(ofSize: size)
         }
 
-        let cssStyle = attributes["style"]?.cssStyle ?? .empty
         let font = CSSFontUtility.createFont(fromCSSStyle: cssStyle, currentFont: nil)
         if let font {
             return font
@@ -90,6 +102,9 @@ private extension RubyTag {
                let font = PlatformFont(name: fontName, size: size) {
                 return font
             }
+            if let baseFont {
+                return baseFont.withSize(size)
+            }
             return PlatformFont.systemFont(ofSize: size)
         }
         return baseFont ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize * rubyScale)
@@ -108,8 +123,10 @@ private struct RubyInlineLabel: View {
     var body: some View {
 #if os(macOS)
         RubyTextRepresentable(attributedText: attributedText)
+            .fixedSize()
 #else
         RubyTextRepresentable(attributedText: attributedText)
+            .fixedSize()
 #endif
     }
 
@@ -195,6 +212,10 @@ private struct RubyTextRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> RubyTextView {
         let view = RubyTextView()
+        view.setContentHuggingPriority(.required, for: .horizontal)
+        view.setContentHuggingPriority(.required, for: .vertical)
+        view.setContentCompressionResistancePriority(.required, for: .horizontal)
+        view.setContentCompressionResistancePriority(.required, for: .vertical)
         view.attributedText = attributedText
         return view
     }
@@ -224,6 +245,16 @@ private struct RubyTextRepresentable: UIViewRepresentable {
 #endif
 
 private final class RubyTextView: PlatformView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        configureForTransparentRendering()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureForTransparentRendering()
+    }
+
     var attributedText: NSAttributedString? {
         didSet {
             guard oldValue != attributedText else { return }
@@ -238,6 +269,18 @@ private final class RubyTextView: PlatformView {
     }
 
 #if os(macOS)
+    private func configureForTransparentRendering() {
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+#else
+    private func configureForTransparentRendering() {
+        backgroundColor = .clear
+        isOpaque = false
+    }
+#endif
+
+#if os(macOS)
     override func draw(_ dirtyRect: CGRect) {
         super.draw(dirtyRect)
         guard let context = NSGraphicsContext.current?.cgContext else { return }
@@ -245,7 +288,6 @@ private final class RubyTextView: PlatformView {
     }
 #else
     override func draw(_ rect: CGRect) {
-        super.draw(rect)
         guard let context = UIGraphicsGetCurrentContext() else { return }
         drawText(in: context, rect: rect)
     }
@@ -260,9 +302,19 @@ private final class RubyTextView: PlatformView {
         var descent: CGFloat = 0
         var leading: CGFloat = 0
         let idealWidth = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading)).rounded(.up)
-        let glyphBounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
-        let glyphHeight = glyphBounds.height
-        let height = (glyphHeight.isNormal && glyphHeight > 0 ? glyphHeight : (ascent + descent + leading)).rounded(.up)
+        let height = (ascent + descent + leading).rounded(.up)
+        if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
+            || NSClassFromString("XCTestCase") != nil {
+            let bounds = CTLineGetBoundsWithOptions(
+                line,
+                [.useGlyphPathBounds, .useOpticalBounds]
+            )
+            AttachmentDebugLogger.recordOnce(
+                "ruby-view-metrics-\(attributedText.string.hashValue)",
+                message: "[RubyView] text='\(attributedText.string)' ascent=\(ascent) descent=\(descent) leading=\(leading) bounds=\(bounds) intrinsic=\(CGSize(width: idealWidth, height: height))"
+            )
+        }
         return CGSize(width: idealWidth, height: height)
     }
 
@@ -282,8 +334,12 @@ private final class RubyTextView: PlatformView {
         let truncated = CTLineCreateTruncatedLine(line, Double(rect.width), .end, tokenLine) ?? line
 
         let glyphBounds = CTLineGetBoundsWithOptions(truncated, [.useGlyphPathBounds])
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        _ = CTLineGetTypographicBounds(truncated, &ascent, &descent, &leading)
         let baselineX = rect.minX - glyphBounds.origin.x
-        let baselineY = rect.minY - glyphBounds.origin.y
+        let baselineY = rect.minY + descent
         context.textPosition = CGPoint(x: baselineX, y: baselineY)
 
         CTLineDraw(truncated, context)

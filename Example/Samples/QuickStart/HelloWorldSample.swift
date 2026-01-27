@@ -27,7 +27,7 @@ struct HelloWorldSample: View {
                 Divider()
                 
                 // HTML rendering
-                HTMLView(html: html, parser: HTMLFuziParser())
+                HTMLView(html: html, parser: HTMLSwiftSoupParser())
                     .htmlEnvironment(\.configuration, .sample)
                     .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
                     .padding()
@@ -46,7 +46,7 @@ let html = \"\"\"
     <p>This is the simplest HTML rendering example.</p>
 \"\"\"
 
-HTMLView(html: html, parser: HTMLFuziParser())
+HTMLView(html: html, parser: HTMLSwiftSoupParser())
     .htmlEnvironment(\\.configuration, .sample)
     .htmlEnvironment(\\.styleContainer, .sample(by: .byWordWrapping))
 """)
@@ -63,7 +63,7 @@ HTMLView(html: html, parser: HTMLFuziParser())
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text("• HTMLView: Main component for rendering HTML")
-                        Text("• HTMLFuziParser: Parser using the Fuzi library")
+                        Text("• HTMLSwiftSoupParser: Parser using the SwiftSoup library")
                         Text("• .sample: Default configuration for examples")
                         Text("• .byWordWrapping: Word-based line breaking")
                     }

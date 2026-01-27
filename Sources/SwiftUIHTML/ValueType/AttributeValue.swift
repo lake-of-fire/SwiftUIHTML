@@ -24,7 +24,7 @@ public struct AttributeValue: Sendable, Hashable {
     }
     
     public var int: Int? {
-        Int(rawValue.replacingOccurrences(of: "px", with: ""))
+        return Int(rawValue.replacingOccurrences(of: "px", with: ""))
     }
     
     public var url: URL? {
@@ -32,7 +32,8 @@ public struct AttributeValue: Sendable, Hashable {
     }
     
     public var cssStyle: CSSStyle? {
-        CSSStyle.cached(style: rawValue)
+        let hasColon = rawValue.utf8.contains(0x3A)
+        return CSSStyle.cached(style: rawValue, hasColon: hasColon)
     }
     
     public func toBool() -> Bool? {

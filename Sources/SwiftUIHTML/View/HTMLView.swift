@@ -13,6 +13,20 @@ public struct HTMLView: View {
 
     let parser: () -> HTMLParserable
     @State private var parsedNode: HTMLNode?
+#if canImport(Foundation)
+    private final class HTMLNodeBox: NSObject {
+        let node: HTMLNode
+        init(_ node: HTMLNode) {
+            self.node = node
+        }
+    }
+
+    private static let parseCache: NSCache<NSString, HTMLNodeBox> = {
+        let cache = NSCache<NSString, HTMLNodeBox>()
+        cache.countLimit = 64
+        return cache
+    }()
+#endif
 #if DEBUG
     @State private var didParse = false
     @State private var debugChildCount = 0
@@ -58,6 +72,22 @@ public struct HTMLView: View {
 #endif
                 return
             }
+#if canImport(Foundation)
+            let cacheDisabled = ProcessInfo.processInfo.environment["SWIFTUIHTML_DISABLE_PARSE_CACHE"] == "1"
+            let parserInstance = parser()
+            let parserTypeName = String(describing: type(of: parserInstance))
+            let cacheKey = "\(parserTypeName)::\(html)" as NSString
+            if !cacheDisabled, let cached = Self.parseCache.object(forKey: cacheKey) {
+                parsedNode = cached.node
+#if DEBUG
+                didParse = true
+                debugChildCount = cached.node.children.count
+#endif
+                return
+            }
+#else
+            let parserInstance = parser()
+#endif
 #if canImport(os)
             let shouldSignpost = ProcessInfo.processInfo.environment["SWIFTUIHTML_SIGNPOSTS"] == "1"
             let signpostID = shouldSignpost ? Self.signposter.makeSignpostID() : OSSignpostID.invalid
@@ -67,10 +97,16 @@ public struct HTMLView: View {
             }
 #endif
             AttachmentIDGenerator.reset()
-            parsedNode = parser().parse(html: html)
+            let parsed = parserInstance.parse(html: html)
+            parsedNode = parsed
+#if canImport(Foundation)
+            if !cacheDisabled {
+                Self.parseCache.setObject(HTMLNodeBox(parsed), forKey: cacheKey, cost: html.count)
+            }
+#endif
 #if DEBUG
             didParse = true
-            debugChildCount = parsedNode?.children.count ?? 0
+            debugChildCount = parsed.children.count
 #endif
 #if DEBUG
             if let parsedNode {

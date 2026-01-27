@@ -107,9 +107,9 @@ private struct HTMLSwiftSoupParser: HTMLParserable {
         do {
             let document = try SwiftSoup.parse(html)
             if let body = document.body() {
-                return try elementToHTMLNode(element: body)
+                return try buildHTMLNode(from: body)
             } else if let wrapper = try document.select("*").first() {
-                return try elementToHTMLNode(element: wrapper)
+                return try buildHTMLNode(from: wrapper)
             } else {
                 return HTMLNode(tag: "div", attributes: [:], children: [])
             }
@@ -118,26 +118,96 @@ private struct HTMLSwiftSoupParser: HTMLParserable {
         }
     }
 
-    private func elementToHTMLNode(element: SwiftSoup.Element) throws -> HTMLNode {
-        let tag = element.tagName()
-        let attributes = element.getAttributes()?.reduce(into: [String: String]()) { result, attribute in
-            result[attribute.getKey()] = attribute.getValue()
-        } ?? [:]
-        let children: [HTMLChild] = try element.getChildNodes().compactMap { node in
-            if let textNode = node as? TextNode {
-                let text = textNode.text()
-                return text.isEmpty ? nil : .text(text)
-            }
-            if let elementNode = node as? Element {
-                if elementNode.tagName() == "br" {
-                    return .text("\n")
-                }
-                return .node(try elementToHTMLNode(element: elementNode))
-            }
-            return nil
-        }
-        return HTMLNode(tag: tag, attributes: attributes, children: children)
+    private func buildHTMLNode(from root: Element) throws -> HTMLNode {
+        let visitor = SwiftSoupHTMLNodeVisitor()
+        try NodeTraversor(visitor).traverse(root)
+        return visitor.root ?? HTMLNode(tag: "div", attributes: [:], children: [])
     }
+}
+
+private final class SwiftSoupHTMLNodeVisitor: NodeVisitor {
+    private struct Builder {
+        let tag: String
+        let attributes: [String: String]
+        var children: [HTMLChild]
+    }
+
+    private var stack: [Builder] = []
+    private(set) var root: HTMLNode?
+
+    func head(_ node: Node, _ depth: Int) throws {
+        if let textNode = node as? TextNode {
+            let whole = textNode.getWholeText()
+            if whole.isEmpty {
+                return
+            }
+            let text: String
+            if hasASCIIWhitespace(whole) {
+                text = TextNode.normaliseWhitespace(whole)
+            } else {
+                text = whole
+            }
+            if !text.isEmpty, !stack.isEmpty {
+                stack[stack.count - 1].children.append(.text(text))
+            }
+            return
+        }
+        guard let element = node as? Element else { return }
+        let rawTag = element.tagName()
+        if isBRTag(rawTag) {
+            if !stack.isEmpty {
+                stack[stack.count - 1].children.append(.newLine)
+            }
+            return
+        }
+
+        var attributes: [String: String] = [:]
+        if let rawAttributes = element.getAttributes() {
+            attributes.reserveCapacity(rawAttributes.size())
+            for attribute in rawAttributes {
+                attributes[attribute.getKey()] = attribute.getValue()
+            }
+        }
+
+        var children: [HTMLChild] = []
+        children.reserveCapacity(element.childNodeSize())
+        stack.append(Builder(tag: rawTag, attributes: attributes, children: children))
+    }
+
+    func tail(_ node: Node, _ depth: Int) throws {
+        guard let element = node as? Element else { return }
+        let rawTag = element.tagName()
+        if isBRTag(rawTag) {
+            return
+        }
+        guard let finished = stack.popLast() else { return }
+        let built = HTMLNode(tag: finished.tag, attributes: finished.attributes, children: finished.children)
+        if stack.isEmpty {
+            root = built
+        } else {
+            stack[stack.count - 1].children.append(.node(built))
+        }
+    }
+}
+
+@inline(__always)
+private func isBRTag(_ raw: String) -> Bool {
+    var iterator = raw.utf8.makeIterator()
+    guard let first = iterator.next(), let second = iterator.next() else { return false }
+    if iterator.next() != nil { return false }
+    let isB = first == 0x62 || first == 0x42
+    let isR = second == 0x72 || second == 0x52
+    return isB && isR
+}
+
+@inline(__always)
+private func hasASCIIWhitespace(_ value: String) -> Bool {
+    for byte in value.utf8 {
+        if ASCIIWhitespace.isWhitespace(byte) {
+            return true
+        }
+    }
+    return false
 }
 
 private func firstNode(tag: String, in node: HTMLNode) -> HTMLNode? {

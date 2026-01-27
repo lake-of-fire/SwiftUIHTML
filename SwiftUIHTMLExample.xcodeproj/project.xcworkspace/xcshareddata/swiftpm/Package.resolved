@@ -1,13 +1,13 @@
 {
-  "originHash" : "792bad491dc3179f69018e19f47448e6187fbae2dd47a0e4783a58e8df506e7e",
+  "originHash" : "61e1deeb353cfdfd6e5a461e093cf455086c7d1e74a41d702b8900e9c06812d6",
   "pins" : [
     {
-      "identity" : "fuzi",
+      "identity" : "lrucache",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rinsuki/Fuzi",
+      "location" : "https://github.com/nicklockwood/LRUCache.git",
       "state" : {
-        "branch" : "rename-to-parse-from-init",
-        "revision" : "4092585ab3eea9de6c2a92024d3ab5ec3bfc4785"
+        "revision" : "cb5b2bd0da83ad29c0bec762d39f41c8ad0eaf3e",
+        "version" : "1.2.1"
       }
     },
     {
@@ -17,6 +17,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "88849b71eda654a2f4326801d96cc3b01d0d7efa"
+      }
+    },
+    {
+      "identity" : "swift-atomics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-atomics.git",
+      "state" : {
+        "revision" : "b601256eab081c0f92f059e12818ac1d4f178ff7",
+        "version" : "1.3.0"
       }
     },
     {
@@ -44,6 +53,15 @@
       "state" : {
         "revision" : "f99ae8aa18f0cf0d53481901f88a0991dc3bd4a2",
         "version" : "601.0.1"
+      }
+    },
+    {
+      "identity" : "swiftsoup",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/scinfu/SwiftSoup.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "cd950c96d1d2ae53068828f1f394178afbc4d83a"
       }
     },
     {

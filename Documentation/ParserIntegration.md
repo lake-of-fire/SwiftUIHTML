@@ -53,98 +53,7 @@ enum HTMLChild {
 
 ---
 
-## 1. Fuzi 파서 통합 / Fuzi Parser Integration
-
-### 한글 설명
-Fuzi는 Swift용 XML/HTML 파서입니다. libxml2를 기반으로 하며 빠른 파싱 성능을 제공합니다.
-
-### English
-Fuzi is an XML/HTML parser for Swift. Based on libxml2, it provides fast parsing performance.
-
-### 설치 / Installation
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/cezheng/Fuzi.git", from: "3.0.0")
-]
-```
-
-### 구현 / Implementation
-
-```swift
-import Fuzi
-import SwiftUIHTML
-
-struct HTMLFuziParser: HTMLParserable {
-    func parse(html: String) -> HTMLNode {
-        do {
-            let document = try HTMLDocument(string: html, encoding: .utf8)
-            
-            // body 태그를 찾거나 root 사용
-            if let body = document.body {
-                return try elementToHTMLNode(element: body)
-            } else if let root = document.root {
-                return try elementToHTMLNode(element: root)
-            } else {
-                return createErrorNode("No root element found")
-            }
-        } catch {
-            return createErrorNode("Parse error: \(error.localizedDescription)")
-        }
-    }
-    
-    private func elementToHTMLNode(element: Fuzi.XMLElement) throws -> HTMLNode {
-        let tag = element.tag ?? "div"
-        
-        // 속성 변환
-        let attributes = element.attributes.reduce(into: [String: String]()) { result, attribute in
-            result[attribute.key] = attribute.value
-        }
-        
-        // 자식 노드 변환
-        let children: [HTMLChild] = try element.childNodes(ofTypes: [.Element, .Text])
-            .compactMap { node -> HTMLChild? in
-                if node.type == .Text {
-                    let text = node.stringValue
-                    return text.isEmpty ? nil : .text(text)
-                } else if let childElement = node.toElement() {
-                    // br 태그는 특별 처리
-                    if childElement.tag == "br" {
-                        return .text("\n")
-                    }
-                    return .node(try elementToHTMLNode(element: childElement))
-                }
-                return nil
-            }
-        
-        return HTMLNode(tag: tag, attributes: attributes, children: children)
-    }
-    
-    private func createErrorNode(_ message: String) -> HTMLNode {
-        HTMLNode(tag: "div", attributes: [:], children: [.text(message)])
-    }
-}
-```
-
-### 사용 예제 / Usage Example
-
-```swift
-struct ContentView: View {
-    let html = """
-        <h1>Fuzi Parser Example</h1>
-        <p>This HTML is parsed using <strong>Fuzi</strong>.</p>
-        """
-    
-    var body: some View {
-        HTMLView(html: html, parser: HTMLFuziParser())
-            .htmlEnvironment(\.configuration, .default)
-    }
-}
-```
-
----
-
-## 2. SwiftSoup 파서 통합 / SwiftSoup Parser Integration
+## 1. SwiftSoup 파서 통합 / SwiftSoup Parser Integration
 
 ### 한글 설명
 SwiftSoup은 Java의 JSoup을 Swift로 포팅한 HTML 파서입니다. CSS 선택자를 지원하며 HTML 조작이 가능합니다.
@@ -158,13 +67,13 @@ SwiftSoup is a Swift port of Java's JSoup HTML parser. It supports CSS selectors
 dependencies: [
     // Latest mainline (SwiftSoup default branch is `master`).
     .package(url: "https://github.com/scinfu/SwiftSoup.git", branch: "master")
-    // Or pin to the latest stable tag:
-    // .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.11.3")
+    // Or pin to a stable tag:
+    // .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.x.y")
 ]
 ```
 
-> 참고: SwiftSoup의 기본 브랜치는 현재 `master`입니다. 최신 메인라인을 추적하려면 `branch: "master"`를 사용하세요. 안정 버전은 최신 릴리스를 사용하세요(현재 2.11.3).
-> Note: SwiftSoup's default branch is currently `master`. Use `branch: "master"` to track the latest mainline. For stable builds, pin the latest release (currently 2.11.3).
+> 참고: SwiftSoup의 기본 브랜치는 `master`입니다. 최신 메인라인을 추적하려면 `branch: "master"`를 사용하세요. 안정 버전은 최신 릴리스를 사용하세요.
+> Note: SwiftSoup's default branch is `master`. Use `branch: "master"` to track the latest mainline. For stable builds, pin the latest release.
 
 ### 구현 / Implementation
 
@@ -244,7 +153,7 @@ struct ContentView: View {
 
 ---
 
-## 3. 커스텀 파서 구현 / Custom Parser Implementation
+## 2. 커스텀 파서 구현 / Custom Parser Implementation
 
 ### 한글 설명
 특별한 요구사항이 있다면 직접 파서를 구현할 수 있습니다.
@@ -319,27 +228,25 @@ struct AdvancedHTMLParser: HTMLParserable {
 
 ---
 
-## 4. 파서 선택 가이드 / Parser Selection Guide
+## 3. 파서 선택 가이드 / Parser Selection Guide
 
 ### 한글 가이드
 
 | 파서 | 장점 | 단점 | 추천 사용 케이스 |
 |-----|------|------|-----------------|
-| **Fuzi** | • 빠른 성능<br>• 메모리 효율적<br>• libxml2 기반 안정성 | • 추가 의존성<br>• 설정 복잡도 | 대용량 HTML 처리 |
-| **SwiftSoup** | • 순수 Swift<br>• CSS 선택자<br>• HTML 조작 기능 | • 상대적으로 느림<br>• 메모리 사용량 많음 | HTML 조작이 필요한 경우 |
+| **SwiftSoup** | • 순수 Swift<br>• CSS 선택자<br>• HTML 조작 기능 | • 추가 의존성<br>• 상대적으로 느림 | HTML 조작이 필요한 경우 |
 | **Custom** | • 완전한 제어<br>• 특수 요구사항 대응 | • 개발 시간<br>• 유지보수 부담 | 특별한 파싱 규칙이 필요한 경우 |
 
 ### English Guide
 
 | Parser | Pros | Cons | Recommended Use Case |
 |--------|------|------|---------------------|
-| **Fuzi** | • Fast performance<br>• Memory efficient<br>• libxml2 stability | • Additional dependency<br>• Setup complexity | Large HTML processing |
-| **SwiftSoup** | • Pure Swift<br>• CSS selectors<br>• HTML manipulation | • Relatively slow<br>• High memory usage | When HTML manipulation needed |
+| **SwiftSoup** | • Pure Swift<br>• CSS selectors<br>• HTML manipulation | • Additional dependency<br>• Relatively slow | When HTML manipulation needed |
 | **Custom** | • Full control<br>• Special requirements | • Development time<br>• Maintenance burden | Special parsing rules needed |
 
 ---
 
-## 5. 파서 최적화 팁 / Parser Optimization Tips
+## 4. 파서 최적화 팁 / Parser Optimization Tips
 
 ### 한글
 1. **캐싱**: 동일한 HTML을 반복 파싱하지 않도록 결과를 캐싱
@@ -384,7 +291,7 @@ class CachedHTMLParser: HTMLParserable {
 }
 
 // 사용
-let cachedParser = CachedHTMLParser(baseParser: HTMLFuziParser())
+let cachedParser = CachedHTMLParser(baseParser: HTMLSwiftSoupParser())
 ```
 
 ### 비동기 파싱 / Async Parsing

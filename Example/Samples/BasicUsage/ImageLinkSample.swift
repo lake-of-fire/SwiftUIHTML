@@ -91,7 +91,7 @@ struct ImageLinkSample: View {
                     Text("Rendering Result")
                         .font(.headline)
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, {
                             var container = HTMLStyleContainer()

@@ -1,6 +1,9 @@
 //  Copyright © 2024 PRND. All rights reserved.
 import Combine
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#endif
 #if os(macOS)
 import AppKit
 #else
@@ -64,6 +67,13 @@ final class AttachmentLayoutEngine {
         print("[SwiftUIHTML][AttachmentLayout] \(rendered)")
     }
 
+    private func environmentFlag(_ key: String) -> Bool {
+        if let raw = getenv(key), let value = String(validatingUTF8: raw) {
+            return value == "1"
+        }
+        return ProcessInfo.processInfo.environment[key] == "1"
+    }
+
     func setup() {
         let attributedStringPublisher = _attributedString.projectedValue
             .compactMap { $0 }
@@ -92,9 +102,15 @@ final class AttachmentLayoutEngine {
         let oldSize = textAttachment.value?.bounds.size ?? .zero
         guard oldSize != size else { return }
         textAttachment.value?.updateSize(size)
+#if os(iOS)
         log("setSize key=\(key) size=\(size)")
         recalculateLayoutIfPossible()
         notifyLayoutUpdate()
+#else
+        log("setSize key=\(key) size=\(size)")
+        recalculateLayoutIfPossible()
+        notifyLayoutUpdate()
+#endif
     }
 
     func getSize(key: AnyHashable) -> CGSize {
@@ -106,14 +122,14 @@ final class AttachmentLayoutEngine {
         let rect = frameStore[key]
         let point = rect?.origin ?? .zero
         guard let textAttachment = keyAttachment[key] else { return point }
-        if ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1" {
-            let lineHeightOverride = rect?.height ?? 0
-            let adjusted = textAttachment.value?.getAdjustedOffset(
-                point: point,
-                lineHeightOverride: lineHeightOverride > 0 ? lineHeightOverride : nil
-            ) ?? point
-            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted) textKit=on")
-            return adjusted
+#if os(macOS)
+        if environmentFlag("SWIFTUIHTML_USE_TEXTKIT_LAYOUT") {
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) textKit=on")
+            return point
+        }
+        if environmentFlag("SWIFTUIHTML_MACOS_USE_RAW_OFFSET") {
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) raw=on")
+            return point
         }
         let lineHeightOverride = rect?.height ?? 0
         let adjusted = textAttachment.value?.getAdjustedOffset(
@@ -122,6 +138,15 @@ final class AttachmentLayoutEngine {
         ) ?? point
         log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted)")
         return adjusted
+#else
+        let lineHeightOverride = rect?.height ?? 0
+        let adjusted = textAttachment.value?.getAdjustedOffset(
+            point: point,
+            lineHeightOverride: lineHeightOverride > 0 ? lineHeightOverride : nil
+        ) ?? point
+        log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted)")
+        return adjusted
+#endif
 
     }
 
@@ -130,8 +155,13 @@ final class AttachmentLayoutEngine {
             return
         }
         containerSize = size
+#if os(iOS)
         log("setContainerSize \(size)")
         recalculateLayoutIfPossible()
+#else
+        log("setContainerSize \(size)")
+        recalculateLayoutIfPossible()
+#endif
     }
 
     @MainActor
@@ -175,13 +205,16 @@ final class AttachmentLayoutEngine {
                 .eraseToAnyPublisher()
         }
         logAttachmentCounts(expected: texts.filter(\.hasAttachment).count)
+#if os(macOS)
         applyFallbackAttachmentSizesIfNeeded()
+#endif
     }
 
 
 }
 
 private extension AttachmentLayoutEngine {
+#if os(macOS)
     func applyFallbackAttachmentSizesIfNeeded() {
         guard !attachmentKeys.isEmpty else { return }
         var applied = 0
@@ -199,17 +232,16 @@ private extension AttachmentLayoutEngine {
             }
             let size = CGSize(width: max(1, width), height: max(1, height))
             setSize(key: key, size: size)
-            if let spacing = styleContainer.textLine?.lineSpacing {
-                lineSpacing = spacing
-            }
             applied += 1
         }
         if applied > 0 {
             log("fallbackAttachmentSizes applied=\(applied)")
         }
     }
+#endif
 
     func resolveLineSpacing(texts: [TextType]) -> CGFloat {
+#if os(iOS)
         var maxLineSpacing: CGFloat = 0
         for text in texts {
             switch text {
@@ -226,12 +258,49 @@ private extension AttachmentLayoutEngine {
             }
         }
         return maxLineSpacing
+#else
+        var maxLineSpacing: CGFloat = 0
+        for text in texts {
+            switch text {
+            case let .text(_, styleContainer):
+                if let lineSpacing = styleContainer.textLine?.lineSpacing {
+                    maxLineSpacing = max(maxLineSpacing, lineSpacing)
+                }
+            case let .attachment(_, _, _, styleContainer):
+                if let lineSpacing = styleContainer.textLine?.lineSpacing {
+                    maxLineSpacing = max(maxLineSpacing, lineSpacing)
+                }
+            default:
+                continue
+            }
+        }
+        // SwiftUI text already accounts for line spacing; applying it again here
+        // makes attachment offsets drift on macOS.
+        return 0
+#endif
     }
 
     func logAttachmentCounts(expected: Int) {
         guard shouldLog else { return }
         let uniqueKeys = Set(attachmentKeys)
-        log("attachmentCounts expected=\(expected) prepared=\(attachmentKeys.count) uniqueKeys=\(uniqueKeys.count)")
+        let expectedImages = texts.reduce(into: 0) { count, text in
+            guard case let .attachment(_, tag, _, _) = text, tag == "img" else { return }
+            count += 1
+        }
+        log(
+            "attachmentCounts expected=\(expected) expectedImages=\(expectedImages) prepared=\(attachmentKeys.count) uniqueKeys=\(uniqueKeys.count)"
+        )
+        let preparedCount = attachmentKeys.count
+        let uniqueCount = uniqueKeys.count
+        let attachmentCounts = AttachmentLayoutTracker.AttachmentCounts(
+            expected: expected,
+            expectedImages: expectedImages,
+            prepared: preparedCount,
+            uniqueKeys: uniqueCount
+        )
+        Task { [attachmentCounts] in
+            await AttachmentLayoutTracker.shared.recordCounts(attachmentCounts)
+        }
         guard uniqueKeys.count != expected else { return }
         var counts: [String: Int] = [:]
         counts.reserveCapacity(attachmentKeys.count)
@@ -276,7 +345,7 @@ private extension AttachmentLayoutEngine {
         guard !attachmentRanges.isEmpty else { return }
         let frames: [CGRect]
 #if os(macOS)
-        if ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1" {
+        if environmentFlag("SWIFTUIHTML_USE_TEXTKIT_LAYOUT") {
             frames = textRangeFrameCalculator.measureLayoutWithTextKit(
                 attributedString: attributedString,
                 in: container,

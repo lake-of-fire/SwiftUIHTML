@@ -32,10 +32,11 @@ extension HTMLNode {
         var contents: [TagElement] = []
         contents.reserveCapacity(children.count)
         for child in children {
-            contents.append(contentsOf: child.toElement(
+            child.appendElements(
+                into: &contents,
                 configuration: configuration,
                 with: styleContainer
-            ))
+            )
         }
         return BlockElement(
             tag: tag,
@@ -50,28 +51,33 @@ extension HTMLNode {
 
 
 fileprivate extension HTMLChild {
+    private static let emptyAttributes: [String: AttributeValue] = [:]
+
     @MainActor
-    func toElement(configuration: HTMLConfiguration, with styleContainer: HTMLStyleContainer) -> [TagElement] {
+    @inline(__always)
+    func appendElements(into contents: inout [TagElement], configuration: HTMLConfiguration, with styleContainer: HTMLStyleContainer) {
         switch self {
         case let .text(text) where text.isEmpty:
-            return []
+            return
 
         case let .text(text):
-            return [
+            contents.append(
                 .inline(InlineElement(
                     tag: "_text",
-                    attributes: [:],
+                    attributes: Self.emptyAttributes,
                     text: text,
                     styleContainer: styleContainer
                 ))
-            ]
+            )
+            return
 
         case let .node(childNode):
-            return childNode
-                .makeElement(
-                    configuration: configuration,
-                    with: styleContainer
-                )
+            childNode.appendElements(
+                into: &contents,
+                configuration: configuration,
+                with: styleContainer
+            )
+            return
         }
     }
 }
@@ -79,51 +85,54 @@ fileprivate extension HTMLChild {
 
 fileprivate extension HTMLNode {
     @MainActor
-    func makeElement(configuration: HTMLConfiguration, with styleContainer: HTMLStyleContainer) -> [TagElement] {
+    @inline(__always)
+    func appendElements(into contents: inout [TagElement], configuration: HTMLConfiguration, with styleContainer: HTMLStyleContainer) {
         var _styleContainer = styleContainer
         configuration.applyStyles(tag: tag, attributes: attributes, to: &_styleContainer)
 
         if tag == "ruby",
            let rubyData = rubyAttachmentData(from: children, styleContainer: _styleContainer) {
-            return [
+            contents.append(
                 .inline(InlineElement(
                     tag: tag,
                     attributes: rubyData,
                     type: .attachment,
                     styleContainer: _styleContainer
                 ))
-            ]
+            )
+            return
         }
 
         switch configuration.tagType(of: tag) {
         case .inline:
-            var contents: [TagElement] = []
-            contents.reserveCapacity(children.count)
             for child in children {
-                contents.append(contentsOf: child.toElement(
+                child.appendElements(
+                    into: &contents,
                     configuration: configuration,
                     with: _styleContainer
-                ))
+                )
             }
-            return contents
+            return
 
         case .attachment:
-            return [
+            contents.append(
                 .inline(InlineElement(
                     tag: tag,
                     attributes: attributes,
                     type: .attachment,
                     styleContainer: _styleContainer
                 ))
-            ]
+            )
+            return
 
         case .block, .none:
-            return [
+            contents.append(
                 .block(toElement(
                     configuration: configuration,
                     with: _styleContainer
                 ))
-            ]
+            )
+            return
         }
     }
 }
@@ -144,7 +153,39 @@ private extension HTMLNode {
             result["ruby-font-size"] = AttributeValue(rawValue: "\(font.pointSize)")
         }
 
+        if let annotationStyle = rubyAnnotationStyle(from: children, baseFont: styleContainer.uiFont) {
+            if let size = annotationStyle.size {
+                result["ruby-annotation-font-size"] = AttributeValue(rawValue: "\(size)")
+            }
+            if let name = annotationStyle.name {
+                result["ruby-annotation-font-name"] = AttributeValue(rawValue: name)
+            }
+        }
+
         return result
+    }
+
+    func rubyAnnotationStyle(from children: [HTMLChild], baseFont: PlatformFont?) -> (size: CGFloat?, name: String?)? {
+        var size: CGFloat?
+        var name: String?
+        for child in children {
+            guard case let .node(node) = child, node.tag == "rt" else { continue }
+            guard let cssStyle = node.attributes["style"]?.cssStyle else { continue }
+            if size == nil, let fontSize = cssStyle["font-size"]?.string {
+                let baseSize = baseFont?.pointSize ?? PlatformFont.systemFontSize
+                size = CSSFontUtility.parseSize(fromFontSize: fontSize, baseSize: baseSize)
+            }
+            if name == nil, let font = CSSFontUtility.createFont(fromCSSStyle: cssStyle, currentFont: baseFont) {
+                name = font.fontName
+            }
+            if size != nil && name != nil {
+                break
+            }
+        }
+        if size == nil && name == nil {
+            return nil
+        }
+        return (size, name)
     }
 
     func rubyComponents(from children: [HTMLChild]) -> (base: String?, ruby: String?) {
@@ -164,26 +205,29 @@ private extension HTMLNode {
             case let .node(node):
                 switch node.tag {
                 case "rt":
-                    let trimmedText = node.plainText().trimmingCharacters(in: .whitespacesAndNewlines)
+                    var rubyBuffer = ""
+                    rubyBuffer.reserveCapacity(16)
+                    node.appendPlainText(into: &rubyBuffer)
+                    let trimmedText = ASCIIWhitespace.trim(rubyBuffer)
                     if !trimmedText.isEmpty {
                         if hasRuby {
                             rubyText.append(" ")
                         }
-                        rubyText.append(trimmedText)
+                        rubyText.append(contentsOf: trimmedText)
                         hasRuby = true
                     }
                 case "rp", "rtc":
                     continue
                 case "rb":
-                    let text = node.plainText()
-                    if !text.isEmpty {
-                        baseText.append(text)
+                    let before = baseText.count
+                    node.appendPlainText(into: &baseText)
+                    if baseText.count > before {
                         hasBase = true
                     }
                 default:
-                    let text = node.plainText()
-                    if !text.isEmpty {
-                        baseText.append(text)
+                    let before = baseText.count
+                    node.appendPlainText(into: &baseText)
+                    if baseText.count > before {
                         hasBase = true
                     }
                 }
@@ -195,14 +239,19 @@ private extension HTMLNode {
 
     func plainText() -> String {
         var result = ""
+        appendPlainText(into: &result)
+        return result
+    }
+
+    @inline(__always)
+    func appendPlainText(into result: inout String) {
         for child in children {
             switch child {
             case let .text(text):
                 result.append(text)
             case let .node(node):
-                result.append(node.plainText())
+                node.appendPlainText(into: &result)
             }
         }
-        return result
     }
 }

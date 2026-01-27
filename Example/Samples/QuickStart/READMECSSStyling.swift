@@ -76,7 +76,7 @@ struct READMECSSStyling: View {
                         .frame(width: 120)
                     }
                     
-                    HTMLView(html: renderingHTML, parser: HTMLFuziParser())
+                    HTMLView(html: renderingHTML, parser: HTMLSwiftSoupParser())
                         .htmlEnvironment(\.configuration, .sample)
                         .htmlEnvironment(\.styleContainer, .sample(by: lineBreakMode.html))
                         .padding()
