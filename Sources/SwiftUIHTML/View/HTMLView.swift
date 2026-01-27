@@ -13,6 +13,7 @@ public struct HTMLView: View {
 
     let parser: () -> HTMLParserable
     @State private var parsedNode: HTMLNode?
+    @State private var renderedElement: BlockElement?
 #if canImport(Foundation)
     private final class HTMLNodeBox: NSObject {
         let node: HTMLNode
@@ -47,12 +48,12 @@ public struct HTMLView: View {
 
     public var body: some View {
         Group {
-            if let parsedNode {
+            if let renderedElement {
+                HTMLBlock(element: renderedElement)
+            } else if let parsedNode {
                 HTMLNodeView(node: parsedNode)
             } else {
-#if DEBUG
-                Text("HTMLView empty")
-#endif
+                Color.clear
             }
         }
 #if DEBUG
@@ -67,6 +68,7 @@ public struct HTMLView: View {
         .task(id: html) {
             guard !html.isEmpty else {
                 parsedNode = nil
+                renderedElement = nil
 #if DEBUG
                 didParse = false
 #endif
@@ -99,6 +101,7 @@ public struct HTMLView: View {
             AttachmentIDGenerator.reset()
             let parsed = parserInstance.parse(html: html)
             parsedNode = parsed
+            renderedElement = parsed.toElement(configuration: configuration, with: styleContainer)
 #if canImport(Foundation)
             if !cacheDisabled {
                 Self.parseCache.setObject(HTMLNodeBox(parsed), forKey: cacheKey, cost: html.count)
@@ -120,6 +123,14 @@ public struct HTMLView: View {
                 Self.signposter.endInterval("HTML parse", intervalState)
             }
 #endif
+        }
+        .onChange(of: styleContainer) { _ in
+            guard let parsedNode else { return }
+            renderedElement = parsedNode.toElement(configuration: configuration, with: styleContainer)
+        }
+        .onChange(of: configuration.cacheKey()) { _ in
+            guard let parsedNode else { return }
+            renderedElement = parsedNode.toElement(configuration: configuration, with: styleContainer)
         }
     }
 }

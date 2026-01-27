@@ -71,7 +71,9 @@ class ViewSnapshotTester {
         AttachmentDebugLogger.record("[Snapshot] layoutIdle=\(waitLayout)")
         logImageViewDiagnostics(in: hostingView)
 
-        let snapshotting = Snapshotting<AnyView, UIImage>.image
+        let snapshotting = Snapshotting<AnyView, UIImage>.image(
+            layout: .fixed(width: resolvedSize.width, height: resolvedSize.height)
+        )
         let image = await snapshotImage(
             of: AnyView(rootView),
             snapshotting: snapshotting
@@ -90,17 +92,19 @@ class ViewSnapshotTester {
             filePath: filePath
         )
         ensureSnapshotArtifactsDirectory(filePath: filePath)
-        let failure = verifySnapshot(
-            of: AnyView(rootView),
-            as: snapshotting,
-            named: name,
-            record: recording,
-            fileID: fileID,
-            file: filePath,
-            testName: testName,
-            line: line,
-            column: column
-        )
+        let failure = await MainActor.run {
+            verifySnapshot(
+                of: AnyView(rootView),
+                as: snapshotting,
+                named: name,
+                record: recording,
+                fileID: fileID,
+                file: filePath,
+                testName: testName,
+                line: line,
+                column: column
+            )
+        }
         if let message = failure {
             recordIssue(
                 message,
@@ -157,6 +161,7 @@ class ViewSnapshotTester {
         return image
     }
 
+    @MainActor
     private static func snapshotImage<V: View>(
         of view: V,
         snapshotting: Snapshotting<V, UIImage>

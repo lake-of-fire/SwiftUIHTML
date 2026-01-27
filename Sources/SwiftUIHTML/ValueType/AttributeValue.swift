@@ -4,6 +4,10 @@ import SwiftUI
 
 public struct AttributeValue: Sendable, Hashable {
     let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
     
     public func convert<T: RawRepresentable>(to type: T.Type) -> T? where T.RawValue == String {
         type.init(rawValue: rawValue)

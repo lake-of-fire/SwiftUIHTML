@@ -170,6 +170,44 @@ struct HTMLTextLayout: View {
             log(
                 "attachmentFrame id=\(info.id) tag=\(info.tag) frame=\(frame) offset=\(offset) alt=\(alt) src=\(src) w=\(width) h=\(height)"
             )
+            if let expected = attachmentManager.frame(key: text) {
+                let renderedX = frame.origin.x + offset.width
+                let renderedY = frame.origin.y + offset.height
+                let deltaX = renderedX - expected.origin.x
+                let deltaY = renderedY - expected.origin.y
+                log(
+                    "attachmentFrameDelta id=\(info.id) tag=\(info.tag) rendered=(\(renderedX), \(renderedY)) actual=\(frame) expected=\(expected) delta=(\(deltaX), \(deltaY))"
+                )
+            }
+            if info.tag == "img",
+               let metrics = attachmentManager.lineMetrics(key: text) {
+                let renderedRect = CGRect(
+                    x: frame.origin.x + offset.width,
+                    y: frame.origin.y + offset.height,
+                    width: frame.size.width,
+                    height: frame.size.height
+                )
+                let baselineOrigin = metrics.lineOrigin
+                let lineRectOrigin = CGPoint(
+                    x: metrics.lineOrigin.x,
+                    y: metrics.lineOrigin.y - metrics.descent
+                )
+                let baselineRelative = CGRect(
+                    x: renderedRect.origin.x - baselineOrigin.x,
+                    y: renderedRect.origin.y - baselineOrigin.y,
+                    width: renderedRect.size.width,
+                    height: renderedRect.size.height
+                )
+                let lineRectRelative = CGRect(
+                    x: renderedRect.origin.x - lineRectOrigin.x,
+                    y: renderedRect.origin.y - lineRectOrigin.y,
+                    width: renderedRect.size.width,
+                    height: renderedRect.size.height
+                )
+                log(
+                    "attachmentLineRelative id=\(info.id) tag=\(info.tag) lineIndex=\(metrics.lineIndex) lineOrigin=\(metrics.lineOrigin) ascent=\(metrics.ascent) descent=\(metrics.descent) lineRect=\(metrics.lineRect) rendered=\(renderedRect) baselineRelative=\(baselineRelative) lineRectRelative=\(lineRectRelative)"
+                )
+            }
         } else {
             log("attachmentFrame frame=\(frame) offset=\(offset)")
         }

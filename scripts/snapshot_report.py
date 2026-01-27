@@ -274,6 +274,22 @@ def heuristic_flags(base, new):
         and new_edge < base_edge * 0.5
     ):
         flags.append("possible missing images (low nonwhite + low edge)")
+    if (
+        base_sat is not None and new_sat is not None
+        and base_edge is not None and new_edge is not None
+        and base_sat > 0.03
+        and new_sat < base_sat * 0.5
+        and new_edge < base_edge * 0.7
+    ):
+        flags.append("possible missing images (low saturation + low edge)")
+    if (
+        base_unique is not None and new_unique is not None
+        and base_edge is not None and new_edge is not None
+        and base_unique > 1500
+        and new_unique < base_unique * 0.5
+        and new_edge < base_edge * 0.6
+    ):
+        flags.append("possible missing images (low color variety + low edge)")
     return flags
 
 

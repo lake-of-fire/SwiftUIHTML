@@ -13,6 +13,12 @@ public struct HTMLNode: Equatable, Sendable {
         self.children = children
     }
 
+    init(tag: String, attributes: [String: AttributeValue], children: [HTMLChild]) {
+        self.tag = tag
+        self.attributes = attributes
+        self.children = children
+    }
+
     public var tagName: String {
         tag
     }
@@ -87,6 +93,9 @@ fileprivate extension HTMLNode {
     @MainActor
     @inline(__always)
     func appendElements(into contents: inout [TagElement], configuration: HTMLConfiguration, with styleContainer: HTMLStyleContainer) {
+        if tag == "rp" {
+            return
+        }
         var _styleContainer = styleContainer
         configuration.applyStyles(tag: tag, attributes: attributes, to: &_styleContainer)
 
@@ -147,6 +156,10 @@ private extension HTMLNode {
         if let rubyText = rubyPieces.ruby, !rubyText.isEmpty {
             result["ruby-text"] = AttributeValue(rawValue: rubyText)
         }
+        if result["ruby-position"] == nil,
+           let annotationPosition = rubyAnnotationPosition(from: children) {
+            result["ruby-position"] = AttributeValue(rawValue: annotationPosition)
+        }
 
         if let font = styleContainer.uiFont {
             result["ruby-font-name"] = AttributeValue(rawValue: font.fontName)
@@ -165,19 +178,68 @@ private extension HTMLNode {
         return result
     }
 
+    func rubyAnnotationPosition(from children: [HTMLChild]) -> String? {
+        var position: String?
+        func scanPosition(in node: HTMLNode) {
+            if node.tag == "rt" || node.tag == "rtc" {
+                if let raw = node.attributes["ruby-position"]?.string {
+                    position = raw
+                    return
+                }
+                if let cssStyle = node.attributes["style"]?.cssStyle,
+                   let raw = cssStyle["ruby-position"]?.string {
+                    position = raw
+                    return
+                }
+            }
+            for child in node.children {
+                if case let .node(childNode) = child {
+                    scanPosition(in: childNode)
+                    if position != nil {
+                        return
+                    }
+                }
+            }
+        }
+
+        for child in children {
+            guard case let .node(node) = child else { continue }
+            scanPosition(in: node)
+            if position != nil {
+                break
+            }
+        }
+        return position
+    }
+
     func rubyAnnotationStyle(from children: [HTMLChild], baseFont: PlatformFont?) -> (size: CGFloat?, name: String?)? {
         var size: CGFloat?
         var name: String?
-        for child in children {
-            guard case let .node(node) = child, node.tag == "rt" else { continue }
-            guard let cssStyle = node.attributes["style"]?.cssStyle else { continue }
+        func scanRTStyles(in node: HTMLNode) {
+            guard node.tag == "rt" else {
+                for child in node.children {
+                    if case let .node(childNode) = child {
+                        scanRTStyles(in: childNode)
+                    }
+                }
+                return
+            }
+            guard let cssStyle = node.attributes["style"]?.cssStyle else { return }
             if size == nil, let fontSize = cssStyle["font-size"]?.string {
                 let baseSize = baseFont?.pointSize ?? PlatformFont.systemFontSize
                 size = CSSFontUtility.parseSize(fromFontSize: fontSize, baseSize: baseSize)
             }
-            if name == nil, let font = CSSFontUtility.createFont(fromCSSStyle: cssStyle, currentFont: baseFont) {
-                name = font.fontName
+            if name == nil {
+                let hasExplicitFamily = cssStyle["font-family"]?.string != nil || cssStyle["font"]?.string != nil
+                if hasExplicitFamily, let font = CSSFontUtility.createFont(fromCSSStyle: cssStyle, currentFont: baseFont) {
+                    name = font.fontName
+                }
             }
+        }
+
+        for child in children {
+            guard case let .node(node) = child else { continue }
+            scanRTStyles(in: node)
             if size != nil && name != nil {
                 break
             }
@@ -190,9 +252,67 @@ private extension HTMLNode {
 
     func rubyComponents(from children: [HTMLChild]) -> (base: String?, ruby: String?) {
         var baseText = ""
+        var rbText = ""
         var rubyText = ""
         var hasBase = false
         var hasRuby = false
+        var hasRB = false
+
+        func appendRubyText(_ text: String) {
+            let trimmed = ASCIIWhitespace.trim(text)
+            if trimmed.isEmpty { return }
+            let normalized = normalizedRubyWhitespace(trimmed)
+            if hasRuby {
+                rubyText.append("\u{00A0}")
+            }
+            rubyText.append(contentsOf: normalized)
+            hasRuby = true
+        }
+
+        func scanRubyText(in node: HTMLNode) {
+            if node.tag == "rt" {
+                var rubyBuffer = ""
+                rubyBuffer.reserveCapacity(16)
+                node.appendPlainText(into: &rubyBuffer)
+                appendRubyText(rubyBuffer)
+                return
+            }
+            for child in node.children {
+                if case let .node(childNode) = child {
+                    scanRubyText(in: childNode)
+                }
+            }
+        }
+
+        func scanBaseText(in node: HTMLNode) {
+            switch node.tag {
+            case "rb":
+                let before = rbText.count
+                node.appendPlainText(into: &rbText)
+                if rbText.count > before {
+                    hasBase = true
+                    hasRB = true
+                }
+            case "rbc":
+                for child in node.children {
+                    switch child {
+                    case let .text(text):
+                        if !text.isEmpty {
+                            baseText.append(text)
+                            hasBase = true
+                        }
+                    case let .node(childNode):
+                        scanBaseText(in: childNode)
+                    }
+                }
+            default:
+                let before = baseText.count
+                node.appendPlainText(into: &baseText)
+                if baseText.count > before {
+                    hasBase = true
+                }
+            }
+        }
 
         for child in children {
             switch child {
@@ -205,36 +325,36 @@ private extension HTMLNode {
             case let .node(node):
                 switch node.tag {
                 case "rt":
-                    var rubyBuffer = ""
-                    rubyBuffer.reserveCapacity(16)
-                    node.appendPlainText(into: &rubyBuffer)
-                    let trimmedText = ASCIIWhitespace.trim(rubyBuffer)
-                    if !trimmedText.isEmpty {
-                        if hasRuby {
-                            rubyText.append(" ")
-                        }
-                        rubyText.append(contentsOf: trimmedText)
-                        hasRuby = true
-                    }
-                case "rp", "rtc":
+                    scanRubyText(in: node)
+                case "rtc":
+                    scanRubyText(in: node)
                     continue
-                case "rb":
-                    let before = baseText.count
-                    node.appendPlainText(into: &baseText)
-                    if baseText.count > before {
-                        hasBase = true
-                    }
+                case "rp":
+                    continue
+                case "rb", "rbc":
+                    scanBaseText(in: node)
                 default:
-                    let before = baseText.count
-                    node.appendPlainText(into: &baseText)
-                    if baseText.count > before {
-                        hasBase = true
-                    }
+                    scanBaseText(in: node)
                 }
             }
         }
 
-        return (base: hasBase ? baseText : nil, ruby: hasRuby ? rubyText : nil)
+        let resolvedBase = hasRB ? rbText : baseText
+        return (base: hasBase ? resolvedBase : nil, ruby: hasRuby ? rubyText : nil)
+    }
+
+    private func normalizedRubyWhitespace(_ text: Substring) -> String {
+        var output = String()
+        output.reserveCapacity(text.count)
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x09, 0x0A, 0x0D, 0x20:
+                output.unicodeScalars.append(UnicodeScalar(0x00A0)!)
+            default:
+                output.unicodeScalars.append(scalar)
+            }
+        }
+        return output
     }
 
     func plainText() -> String {

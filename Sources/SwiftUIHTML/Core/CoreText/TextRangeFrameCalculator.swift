@@ -103,6 +103,77 @@ final class TextRangeFrameCalculator {
         )
     }
 
+    struct LineMetrics {
+        let range: NSRange
+        let lineIndex: Int
+        let lineOrigin: CGPoint
+        let ascent: CGFloat
+        let descent: CGFloat
+        let leading: CGFloat
+        let lineRect: CGRect
+    }
+
+    func collectLineMetrics(
+        for attributedString: NSAttributedString,
+        containerSize: CGSize,
+        ranges: [NSRange],
+        keys: [AnyHashable],
+        summaryProvider: (AnyHashable) -> String
+    ) -> [AnyHashable: LineMetrics] {
+        guard !ranges.isEmpty, !keys.isEmpty else { return [:] }
+        let frame = createTextFrame(for: attributedString, containerSize: containerSize)
+        let lines = CTFrameGetLines(frame) as! [CTLine]
+        guard !lines.isEmpty else { return [:] }
+
+        let adjustedOrigins = adjustLineOrigins(frame: frame, lines: lines, containerSize: containerSize)
+        var metricsByKey: [AnyHashable: LineMetrics] = [:]
+        metricsByKey.reserveCapacity(ranges.count)
+        for (index, range) in ranges.enumerated() {
+            let key = keys.count > index ? keys[index] : keys.last!
+            var matchedLineIndex: Int? = nil
+            for (lineIndex, line) in lines.enumerated() {
+                let lineRange = CTLineGetStringRange(line)
+                let lineNSRange = NSRange(location: lineRange.location, length: lineRange.length)
+                if NSIntersectionRange(lineNSRange, range).length > 0 {
+                    matchedLineIndex = lineIndex
+                    break
+                }
+            }
+            guard let lineIndex = matchedLineIndex else { continue }
+            let line = lines[lineIndex]
+            var ascent: CGFloat = 0
+            var descent: CGFloat = 0
+            var leading: CGFloat = 0
+            _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+            let lineOrigin = adjustedOrigins[lineIndex]
+            let rect = CGRect(
+                x: 0,
+                y: -descent,
+                width: 0,
+                height: ascent + descent
+            )
+            let lineRect = CGRect(
+                x: rect.origin.x + lineOrigin.x,
+                y: lineOrigin.y + rect.origin.y,
+                width: rect.size.width,
+                height: rect.size.height
+            )
+            metricsByKey[key] = LineMetrics(
+                range: range,
+                lineIndex: lineIndex,
+                lineOrigin: lineOrigin,
+                ascent: ascent,
+                descent: descent,
+                leading: leading,
+                lineRect: lineRect
+            )
+            AttachmentDebugLogger.record(
+                "[LineMetrics] key=\(summaryProvider(key)) range=\(range) lineIndex=\(lineIndex) lineOrigin=\(lineOrigin) ascent=\(ascent) descent=\(descent) leading=\(leading) lineRect=\(lineRect) container=\(containerSize)"
+            )
+        }
+        return metricsByKey
+    }
+
 #if os(macOS)
     func measureLayoutWithTextKit(
         attributedString: NSAttributedString,

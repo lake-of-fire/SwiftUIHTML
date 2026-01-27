@@ -39,6 +39,10 @@ public struct HTMLConfiguration: @unchecked Sendable {
             tag: "u",
             renderer: UnderlineTag.self
         )
+        .register(
+            tag: "rb", "rt", "rp", "rtc", "rbc",
+            renderer: DefaultInlineTag.self
+        )
         .register(tag: "ruby", renderer: RubyTag.self)
         .register(tag: "img", renderer: ImageTag.self)
     }
@@ -49,6 +53,41 @@ extension HTMLConfiguration {
         var copy = self
         copy.attributeStyle = style
         return copy
+    }
+}
+
+extension HTMLConfiguration {
+    @inline(__always)
+    func cacheKey() -> Int {
+        var hasher = Hasher()
+        hasher.combine(ObjectIdentifier(type(of: attributeStyle)))
+
+        if !dictionaryType.isEmpty {
+            for key in dictionaryType.keys.sorted() {
+                hasher.combine(key)
+                if let type = dictionaryType[key] {
+                    switch type {
+                    case .block: hasher.combine(1)
+                    case .inline: hasher.combine(2)
+                    case .attachment: hasher.combine(3)
+                    }
+                } else {
+                    hasher.combine(0)
+                }
+            }
+        }
+
+        if !dictionary.isEmpty {
+            for key in dictionary.keys.sorted() {
+                hasher.combine(key)
+                if let renderer = dictionary[key] {
+                    hasher.combine(ObjectIdentifier(renderer))
+                } else {
+                    hasher.combine(0)
+                }
+            }
+        }
+        return hasher.finalize()
     }
 }
 

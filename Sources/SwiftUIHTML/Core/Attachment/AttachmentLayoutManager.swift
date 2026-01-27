@@ -20,6 +20,7 @@ final class AttachmentLayoutEngine {
 
     private var keyAttachment: [AnyHashable: Weak<TextAttachment>] = [:]
     private var frameStore: [AnyHashable: CGRect] = [:]
+    private var lineMetricsByKey: [AnyHashable: TextRangeFrameCalculator.LineMetrics] = [:]
     private var texts: [TextType] = []
     private var preparedString: NSMutableAttributedString?
     private var targetCache: [(value: TextAttachment, range: NSRange)] = []
@@ -118,17 +119,27 @@ final class AttachmentLayoutEngine {
         return textAttachment.value?.getAdjustedSize() ?? .zero
     }
 
+    func getFrame(key: AnyHashable) -> CGRect? {
+        frameStore[key]
+    }
+
+    func getLineMetrics(key: AnyHashable) -> TextRangeFrameCalculator.LineMetrics? {
+        lineMetricsByKey[key]
+    }
+
     func getOffset(key: AnyHashable) -> CGPoint {
         let rect = frameStore[key]
         let point = rect?.origin ?? .zero
         guard let textAttachment = keyAttachment[key] else { return point }
 #if os(macOS)
-        if environmentFlag("SWIFTUIHTML_USE_TEXTKIT_LAYOUT") {
-            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) textKit=on")
-            return point
-        }
         if environmentFlag("SWIFTUIHTML_MACOS_USE_RAW_OFFSET") {
             log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) raw=on")
+            return point
+        }
+        if let textType = key.base as? TextType,
+           case let .attachment(_, tag, _, _) = textType,
+           tag == "img" {
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(point) raw=img")
             return point
         }
         let lineHeightOverride = rect?.height ?? 0
@@ -136,7 +147,11 @@ final class AttachmentLayoutEngine {
             point: point,
             lineHeightOverride: lineHeightOverride > 0 ? lineHeightOverride : nil
         ) ?? point
-        log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted)")
+        if environmentFlag("SWIFTUIHTML_USE_TEXTKIT_LAYOUT") {
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted) textKit=on")
+        } else {
+            log("getOffset key=\(key) frame=\(String(describing: frameStore[key])) adjusted=\(adjusted)")
+        }
         return adjusted
 #else
         let lineHeightOverride = rect?.height ?? 0
@@ -241,7 +256,6 @@ private extension AttachmentLayoutEngine {
 #endif
 
     func resolveLineSpacing(texts: [TextType]) -> CGFloat {
-#if os(iOS)
         var maxLineSpacing: CGFloat = 0
         for text in texts {
             switch text {
@@ -258,26 +272,6 @@ private extension AttachmentLayoutEngine {
             }
         }
         return maxLineSpacing
-#else
-        var maxLineSpacing: CGFloat = 0
-        for text in texts {
-            switch text {
-            case let .text(_, styleContainer):
-                if let lineSpacing = styleContainer.textLine?.lineSpacing {
-                    maxLineSpacing = max(maxLineSpacing, lineSpacing)
-                }
-            case let .attachment(_, _, _, styleContainer):
-                if let lineSpacing = styleContainer.textLine?.lineSpacing {
-                    maxLineSpacing = max(maxLineSpacing, lineSpacing)
-                }
-            default:
-                continue
-            }
-        }
-        // SwiftUI text already accounts for line spacing; applying it again here
-        // makes attachment offsets drift on macOS.
-        return 0
-#endif
     }
 
     func logAttachmentCounts(expected: Int) {
@@ -367,6 +361,9 @@ private extension AttachmentLayoutEngine {
         )
 #endif
         let values = zip(attachmentKeys, frames).map { (key: $0, bounds: $1) }
+        if shouldLog {
+            logLineMetricsIfNeeded(preparedString: preparedString, container: container)
+        }
         storeRangeBounds(values)
     }
 
@@ -510,6 +507,21 @@ private extension AttachmentLayoutEngine {
             "\(summary(for: entry.key)) frame=\(entry.bounds)"
         }
         log("layoutFrames sample=\(sample.joined(separator: " | ")) container=\(container)")
+    }
+
+    func logLineMetricsIfNeeded(preparedString: NSMutableAttributedString, container: CGSize) {
+        guard shouldLog else { return }
+        guard !attachmentRanges.isEmpty else { return }
+        let sampleCount = min(6, attachmentRanges.count)
+        let ranges = Array(attachmentRanges.prefix(sampleCount))
+        let keys = Array(attachmentKeys.prefix(sampleCount))
+        lineMetricsByKey = textRangeFrameCalculator.collectLineMetrics(
+            for: preparedString,
+            containerSize: container,
+            ranges: ranges,
+            keys: keys,
+            summaryProvider: { summary(for: $0) }
+        )
     }
 
     func summary(for key: AnyHashable) -> String {

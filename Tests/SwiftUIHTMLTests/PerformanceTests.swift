@@ -274,6 +274,36 @@ struct PerformanceTests {
 
     @Test
     @MainActor
+    func htmlViewReRenderBenchmark() throws {
+        guard let parser = makeSwiftSoupParserIfAvailable() else {
+            print("SwiftSoup parser not available; skipping htmlViewReRenderBenchmark")
+            #expect(true)
+            return
+        }
+
+        let html = listHeavyHTML(itemCount: 2000, depth: 3)
+        let configuration = HTMLConfiguration()
+        let styleContainer = HTMLStyleContainer()
+        let node = parser.parse(html: html)
+        let cachedElement = node.toElement(configuration: configuration, with: styleContainer)
+
+        let rebuild = measureMedian {
+            _ = node.toElement(configuration: configuration, with: styleContainer)
+        }
+
+        let reuse = measureMedian {
+            _ = cachedElement.contents.count
+        }
+
+        print("HTML view rebuild median (>=\(benchmarkMinimumSeconds())s): \(String(format: "%.4f", rebuild))s")
+        print("HTML view reuse median (>=\(benchmarkMinimumSeconds())s): \(String(format: "%.6f", reuse))s")
+
+        #expect(rebuild > 0)
+        #expect(reuse >= 0)
+    }
+
+    @Test
+    @MainActor
     func listElementBuildBenchmark() throws {
         guard let parser = makeSwiftSoupParserIfAvailable() else {
             print("SwiftSoup parser not available; skipping listElementBuildBenchmark")
@@ -475,10 +505,10 @@ private func buildHTMLNode(from root: Element) throws -> HTMLNode {
 }
 
 private final class SwiftSoupNodeBuilder {
-    private static let emptyAttributes: [String: String] = [:]
+    private static let emptyAttributes: [String: AttributeValue] = [:]
 
     let tag: String
-    let attributes: [String: String]
+    let attributes: [String: AttributeValue]
     let childNodes: [Node]
     let capacityHint: Int
     var childIndex: Int
@@ -488,10 +518,10 @@ private final class SwiftSoupNodeBuilder {
         let tag = element.tagName()
         self.tag = tag
         if let rawAttributes = element.getAttributes(), rawAttributes.size() > 0 {
-            var attributes: [String: String] = [:]
+            var attributes: [String: AttributeValue] = [:]
             attributes.reserveCapacity(rawAttributes.size())
             for attribute in rawAttributes {
-                attributes[attribute.getKey()] = attribute.getValue()
+                attributes[attribute.getKey()] = AttributeValue(rawValue: attribute.getValue())
             }
             self.attributes = attributes
         } else {

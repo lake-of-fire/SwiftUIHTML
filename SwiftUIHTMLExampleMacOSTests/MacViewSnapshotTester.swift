@@ -482,8 +482,10 @@ class MacViewSnapshotTester {
     ) async throws {
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
-        let requestedTextKit = ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] == "1"
-        setenv("SWIFTUIHTML_USE_TEXTKIT_LAYOUT", requestedTextKit ? "1" : "0", 1)
+        let textKitEnvValue = ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"]
+        let requestedTextKit = textKitEnvValue == "1"
+        let effectiveTextKit = textKitEnvValue ?? "0"
+        setenv("SWIFTUIHTML_USE_TEXTKIT_LAYOUT", effectiveTextKit, 1)
         let requestedRawOffset = ProcessInfo.processInfo.environment["SWIFTUIHTML_MACOS_USE_RAW_OFFSET"] == "1"
         setenv("SWIFTUIHTML_MACOS_USE_RAW_OFFSET", requestedRawOffset ? "1" : "0", 1)
         let textKitEnv = ProcessInfo.processInfo.environment["SWIFTUIHTML_USE_TEXTKIT_LAYOUT"] ?? "nil"
@@ -633,6 +635,7 @@ class MacViewSnapshotTester {
             )
         }
         let finalImage = image
+        ensureSnapshotArtifactsDirectory()
         writeArtifactImage(
             finalImage,
             testName: baselineTestName,
@@ -661,7 +664,6 @@ class MacViewSnapshotTester {
             snapshotDirectory: snapshotDirectory,
             baselineTestName: baselineTestName
         )
-        ensureSnapshotArtifactsDirectory()
         let failure = withSnapshotTesting(record: recordOverride) {
             verifySnapshot(
                 of: finalImage,
@@ -716,7 +718,10 @@ class MacViewSnapshotTester {
         name: String?,
         filePath: StaticString
     ) {
-        guard let root = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] else { return }
+        guard let root = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] else {
+            AttachmentDebugLogger.record("[Snapshot] artifact skip: SNAPSHOT_ARTIFACTS not set")
+            return
+        }
         let fileURL = URL(fileURLWithPath: "\(filePath)", isDirectory: false)
         let group = sanitizePathComponent(fileURL.deletingPathExtension().lastPathComponent)
         let safeTestName = sanitizePathComponent(testName)
@@ -729,6 +734,7 @@ class MacViewSnapshotTester {
         guard let tiff = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff),
               let png = bitmap.representation(using: .png, properties: [:]) else {
+            AttachmentDebugLogger.record("[Snapshot] artifact skip: PNG encoding failed")
             return
         }
         do {
@@ -737,6 +743,7 @@ class MacViewSnapshotTester {
                 withIntermediateDirectories: true
             )
             try png.write(to: pngURL)
+            AttachmentDebugLogger.record("[Snapshot] artifact wrote \(pngURL.path)")
         } catch {
             AttachmentDebugLogger.record("[Snapshot] artifact write failed \(error.localizedDescription)")
         }

@@ -56,6 +56,14 @@ final class AttachmentManager: ObservableObject {
         return CGSize(width: point.x, height: point.y)
     }
 
+    func frame(key: AnyHashable) -> CGRect? {
+        layoutEngine.getFrame(key: key)
+    }
+
+    func lineMetrics(key: AnyHashable) -> TextRangeFrameCalculator.LineMetrics? {
+        layoutEngine.getLineMetrics(key: key)
+    }
+
     // SwiftUI Text(image:) 주입 이미지
     func sizeImage(key: AnyHashable, styleContainer: HTMLStyleContainer) -> PlatformImage {
         var size = layoutEngine.getSize(key: key)

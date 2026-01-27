@@ -116,23 +116,20 @@ final class TextAttachment: NSTextAttachment {
         let boundHeight = getAdjustedSize().height
 #endif
         let lineHeight = lineHeightOverride ?? textLine?.lineHeight ?? fontHeight
-
-        var verticalOffset = (boundHeight - fontHeight) / 2
-
+#if os(macOS)
+        var verticalOffset = (lineHeight - fontHeight) / 2
+        let heightDelta = max(0, boundHeight - fontHeight)
+        verticalOffset += heightDelta * 1.4
         if lineHeight < boundHeight {
             verticalOffset -= (boundHeight - lineHeight) / 2
         }
         var adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
-#if os(macOS)
-        if let lineHeightOverride, lineHeightOverride > 0 {
-            let baseLineHeight = textLine?.lineHeight ?? font.manabiLineHeight
-            if bounds.size.height < baseLineHeight {
-                let extra = (lineHeightOverride - font.manabiLineHeight) / 2
-                if extra > 0 {
-                    adjusted.y -= extra
-                }
-            }
+#else
+        var verticalOffset = (boundHeight - fontHeight) / 2
+        if lineHeight < boundHeight {
+            verticalOffset -= (boundHeight - lineHeight) / 2
         }
+        var adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
 #endif
         if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
             || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
@@ -196,13 +193,16 @@ private extension TextAttachment {
         guard case let .attachment(_, _, attributes, _) = textType else { return .before }
         let cssStyle = attributes["style"]?.cssStyle ?? .empty
         let raw = attributes["ruby-position"]?.string ?? cssStyle["ruby-position"]?.string
-        switch raw {
+        switch raw?.lowercased() {
         case "over": return .before
         case "under": return .after
         case "inter-character": return .interCharacter
+        case "intercharacter": return .interCharacter
+        case "alternate": return .before
+        case "alternate over": return .before
+        case "alternate under": return .after
         case "after": return .after
         case "before": return .before
-        case "interCharacter": return .interCharacter
         case "inline": return .inline
         default: return .before
         }
