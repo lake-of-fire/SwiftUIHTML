@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import html
+import json
 import os
 import subprocess
 import time
@@ -77,6 +78,66 @@ def run_vision_ocr(image_path):
     if not output:
         return None
     return output
+
+
+def parse_trim_geometry(value):
+    if not value:
+        return None
+    # format: WxH+X+Y
+    if "+" not in value or "x" not in value:
+        return None
+    try:
+        size, x, y = value.split("+")
+        w, h = size.split("x")
+        return {
+            "trim_width": int(w),
+            "trim_height": int(h),
+            "trim_x": int(x),
+            "trim_y": int(y),
+        }
+    except ValueError:
+        return None
+
+
+def load_ocr_metrics(ocr_dir, base_name, label):
+    if not ocr_dir:
+        return None
+    path = ocr_dir / f"{base_name}.{label}.lines.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    lines = data.get("lines") or []
+    heights = []
+    char_widths = []
+    for line in lines:
+        rect = line.get("rect") or {}
+        text = line.get("text") or ""
+        h = rect.get("h")
+        w = rect.get("w")
+        if isinstance(h, (int, float)):
+            heights.append(float(h))
+        if isinstance(w, (int, float)) and text:
+            char_widths.append(float(w) / max(1, len(text)))
+    def median(values):
+        if not values:
+            return None
+        values = sorted(values)
+        mid = len(values) // 2
+        if len(values) % 2:
+            return values[mid]
+        return (values[mid - 1] + values[mid]) / 2
+    return {
+        "ocr_top": data.get("topPadding"),
+        "ocr_bottom": data.get("bottomPadding"),
+        "ocr_left": data.get("leftPadding"),
+        "ocr_right": data.get("rightPadding"),
+        "ocr_lines": len(lines),
+        "ocr_line_height_median": median(heights),
+        "ocr_char_width_median": median(char_widths),
+    }
 
 
 def render_html_preview(html_payload, out_path, width=600, height=220):
@@ -226,7 +287,9 @@ def image_metrics(path):
             edge_mean = float(edge_out.split()[0])
         except ValueError:
             edge_mean = None
-    return {
+    trim_out = run_magick([str(path), "-trim", "-format", "%@", "info:"])
+    trim = parse_trim_geometry(trim_out)
+    metrics = {
         "width": width,
         "height": height,
         "unique": unique,
@@ -236,6 +299,13 @@ def image_metrics(path):
         "nonwhite_ratio": nonwhite_ratio,
         "edge_mean": edge_mean,
     }
+    if trim:
+        metrics.update(trim)
+        metrics["trim_left"] = trim["trim_x"]
+        metrics["trim_top"] = trim["trim_y"]
+        metrics["trim_right"] = max(0, width - (trim["trim_x"] + trim["trim_width"]))
+        metrics["trim_bottom"] = max(0, height - (trim["trim_y"] + trim["trim_height"]))
+    return metrics
 
 
 def heuristic_flags(base, new):
@@ -309,9 +379,34 @@ def format_metrics(metrics):
     dark_str = "n/a" if dark is None else f"{dark:.4f}"
     nonwhite_str = "n/a" if nonwhite is None else f"{nonwhite:.4f}"
     edge_str = "n/a" if edge is None else f"{edge:.4f}"
+    trim_left = metrics.get("trim_left")
+    trim_top = metrics.get("trim_top")
+    trim_right = metrics.get("trim_right")
+    trim_bottom = metrics.get("trim_bottom")
+    trim_str = ""
+    if None not in (trim_left, trim_top, trim_right, trim_bottom):
+        trim_str = f", trim(T/L/B/R)={trim_top}/{trim_left}/{trim_bottom}/{trim_right}"
+    ocr_top = metrics.get("ocr_top")
+    ocr_bottom = metrics.get("ocr_bottom")
+    ocr_left = metrics.get("ocr_left")
+    ocr_right = metrics.get("ocr_right")
+    ocr_lines = metrics.get("ocr_lines")
+    ocr_line_h = metrics.get("ocr_line_height_median")
+    ocr_char_w = metrics.get("ocr_char_width_median")
+    ocr_str = ""
+    if None not in (ocr_top, ocr_bottom, ocr_left, ocr_right, ocr_lines):
+        ocr_str = (
+            f", ocr(T/L/B/R)={ocr_top:.1f}/{ocr_left:.1f}/{ocr_bottom:.1f}/{ocr_right:.1f}"
+            f", lines={ocr_lines}"
+        )
+        if ocr_line_h is not None:
+            ocr_str += f", lineH~{ocr_line_h:.1f}"
+        if ocr_char_w is not None:
+            ocr_str += f", charW~{ocr_char_w:.2f}"
     return (
         f"{width}x{height} px, unique={unique}, sat={sat_str}, lum={lum_str}, "
         f"dark={dark_str}, nonwhite={nonwhite_str}, edge={edge_str}"
+        f"{trim_str}{ocr_str}"
     )
 
 
@@ -321,6 +416,7 @@ def build_report(artifacts_dir, baseline_dir, title, out_prefix):
     stamp = time.strftime("%Y%m%d-%H%M%S")
     report_dir = Path(f"{out_prefix}-{stamp}")
     report_dir.mkdir(parents=True, exist_ok=True)
+    ocr_dir = artifacts_dir.parent / "ocr"
 
     rows = []
     for artifact in sorted(artifacts_dir.rglob("*.png")):
@@ -379,6 +475,13 @@ function toggleHtml(id) {
 
         base_metrics = image_metrics(baseline) if baseline.exists() else {}
         new_metrics = image_metrics(artifact) if artifact.exists() else {}
+        base_name = artifact.stem
+        base_ocr = load_ocr_metrics(ocr_dir, base_name, "baseline") if ocr_dir.exists() else None
+        new_ocr = load_ocr_metrics(ocr_dir, base_name, "new") if ocr_dir.exists() else None
+        if base_ocr:
+            base_metrics.update(base_ocr)
+        if new_ocr:
+            new_metrics.update(new_ocr)
         flags = heuristic_flags(base_metrics, new_metrics)
 
         parts.append("<div>")

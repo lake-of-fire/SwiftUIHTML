@@ -8,6 +8,9 @@ struct HTMLSwiftSoupParser: HTMLParserable {
         do {
             let document = try SwiftSoup.parse(html)
             if let body = document.body() {
+                if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1" {
+                    logBodyChildren(body)
+                }
                 return try buildHTMLNode(from: body)
             }
             if let root = try document.select("*").first() {
@@ -19,9 +22,64 @@ struct HTMLSwiftSoupParser: HTMLParserable {
         return HTMLNode(tag: "div", children: [])
     }
 
+    private func logBodyChildren(_ body: Element) {
+        var lines: [String] = []
+        lines.reserveCapacity(body.childNodeSize() + 1)
+        lines.append("[Parser] body children=\(body.childNodeSize())")
+        for child in body.getChildNodes() {
+            if let textNode = child as? TextNode {
+                let text = normalizeText(
+                    textNode,
+                    preserveWhitespace: HTMLSwiftSoupParser.shouldPreserveWhitespace(in: body.tagName())
+                )
+                let preview = text
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\t", with: "\\t")
+                lines.append("[Parser] text len=\(text.count) preview=\(preview)")
+            } else if let element = child as? Element {
+                lines.append("[Parser] element tag=\(element.tagName()) children=\(element.childNodeSize())")
+            } else {
+                lines.append("[Parser] node type=\(type(of: child))")
+            }
+        }
+        let payload = lines.joined(separator: "\n") + "\n"
+        let url = URL(fileURLWithPath: "/tmp/swiftuihtml-parser.log")
+        if let data = payload.data(using: .utf8) {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                try? handle.seekToEnd()
+                try? handle.write(contentsOf: data)
+                try? handle.close()
+            } else {
+                try? data.write(to: url)
+            }
+        }
+    }
+
     @inline(__always)
-    private func normalizeText(_ node: TextNode) -> String {
-        node.text()
+    private func normalizeText(_ node: TextNode, preserveWhitespace: Bool) -> String {
+        let text = node.text()
+        guard !preserveWhitespace else { return text }
+        var result = String()
+        result.reserveCapacity(text.count)
+        var lastWasWhitespace = false
+        for scalar in text.unicodeScalars {
+            let isWhitespace: Bool
+            if scalar.isASCII {
+                isWhitespace = ASCIIWhitespace.isWhitespace(UInt8(scalar.value))
+            } else {
+                isWhitespace = scalar.properties.isWhitespace
+            }
+            if isWhitespace {
+                if !lastWasWhitespace {
+                    result.append(" ")
+                    lastWasWhitespace = true
+                }
+            } else {
+                result.append(String(scalar))
+                lastWasWhitespace = false
+            }
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func buildHTMLNode(from root: Element) throws -> HTMLNode {
@@ -29,10 +87,10 @@ struct HTMLSwiftSoupParser: HTMLParserable {
     }
 
     fileprivate static let blockTags: Set<String> = [
-        "address", "article", "aside", "blockquote", "canvas", "dd", "div", "dl", "dt",
-        "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4",
-        "h5", "h6", "header", "hr", "li", "main", "nav", "noscript", "ol", "p", "pre",
-        "section", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul"
+        "address", "article", "aside", "blockquote", "body", "canvas", "dd", "div", "dl",
+        "dt", "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3",
+        "h4", "h5", "h6", "header", "hr", "html", "li", "main", "nav", "noscript", "ol",
+        "p", "pre", "section", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul"
     ]
 
     fileprivate static func shouldDropWhitespaceText(_ text: String, in parentTag: String) -> Bool {
@@ -41,6 +99,14 @@ struct HTMLSwiftSoupParser: HTMLParserable {
             return false
         }
         return blockTags.contains(parentTag)
+    }
+
+    fileprivate static let whitespacePreservingTags: Set<String> = [
+        "pre", "code", "textarea"
+    ]
+
+    fileprivate static func shouldPreserveWhitespace(in tag: String) -> Bool {
+        whitespacePreservingTags.contains(tag)
     }
 }
 
@@ -104,8 +170,20 @@ extension HTMLSwiftSoupParser {
                 current.childIndex += 1
 
                 if let textNode = child as? TextNode {
-                    let text = normalizeText(textNode)
+                    let text = normalizeText(
+                        textNode,
+                        preserveWhitespace: HTMLSwiftSoupParser.shouldPreserveWhitespace(in: current.tag)
+                    )
                     if !text.isEmpty {
+                        if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1" {
+                            let trimmed = ASCIIWhitespace.trim(text)
+                            if trimmed.isEmpty, current.tag == "body" {
+                                let preview = text
+                                    .replacingOccurrences(of: "\n", with: "\\n")
+                                    .replacingOccurrences(of: "\t", with: "\\t")
+                                print("[SwiftSoupParser] whitespace in <body> len=\\(text.count) preview=\\(preview)")
+                            }
+                        }
                         if current.isBlockParent && HTMLSwiftSoupParser.shouldDropWhitespaceText(text, in: current.tag) {
                             if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1" {
                                 print("[SwiftSoupParser] drop whitespace text in <\(current.tag)> len=\(text.count)")

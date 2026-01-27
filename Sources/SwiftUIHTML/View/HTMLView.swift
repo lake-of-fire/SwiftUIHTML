@@ -50,6 +50,10 @@ public struct HTMLView: View {
         Group {
             if let renderedElement {
                 HTMLBlock(element: renderedElement)
+                    .modifier(
+                        configuration.attributeStyle
+                            .eraseToAnyLayoutModifier(attributes: renderedElement.attributes)
+                    )
             } else if let parsedNode {
                 HTMLNodeView(node: parsedNode)
             } else {

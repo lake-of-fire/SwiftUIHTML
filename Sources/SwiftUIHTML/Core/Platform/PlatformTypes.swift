@@ -44,6 +44,20 @@ internal extension PlatformFont {
     var manabiBoundingBoxMaxY: CGFloat {
         CTFontGetBoundingBox(manabiCTFont).maxY
     }
+
+#if os(macOS)
+    func withItalicTrait() -> PlatformFont? {
+        let traits = fontDescriptor.symbolicTraits.union(.italic)
+        guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else { return nil }
+        return PlatformFont(descriptor: descriptor, size: pointSize)
+    }
+#else
+    func withItalicTrait() -> PlatformFont? {
+        let traits = fontDescriptor.symbolicTraits.union(.traitItalic)
+        guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else { return nil }
+        return PlatformFont(descriptor: descriptor, size: pointSize)
+    }
+#endif
 }
 
 internal extension PlatformImage {

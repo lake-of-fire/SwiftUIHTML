@@ -40,4 +40,47 @@ public enum ASCIIWhitespace {
         let endIndex = String.Index(end, within: value) ?? value.endIndex
         return value[startIndex..<endIndex]
     }
+
+    @inline(__always)
+    public static func trimLeading(_ value: String) -> Substring {
+        trimLeading(value[...])
+    }
+
+    @inline(__always)
+    public static func trimLeading(_ value: Substring) -> Substring {
+        let utf8 = value.utf8
+        var start = utf8.startIndex
+        let end = utf8.endIndex
+
+        while start < end, ASCIIWhitespace.isWhitespace(utf8[start]) {
+            start = utf8.index(after: start)
+        }
+
+        let startIndex = String.Index(start, within: value) ?? value.startIndex
+        return value[startIndex..<value.endIndex]
+    }
+
+    @inline(__always)
+    public static func trimTrailing(_ value: String) -> Substring {
+        trimTrailing(value[...])
+    }
+
+    @inline(__always)
+    public static func trimTrailing(_ value: Substring) -> Substring {
+        let utf8 = value.utf8
+        var end = utf8.endIndex
+        let start = utf8.startIndex
+
+        while end > start {
+            let before = utf8.index(before: end)
+            if ASCIIWhitespace.isWhitespace(utf8[before]) {
+                end = before
+            } else {
+                break
+            }
+        }
+
+        let endIndex = String.Index(end, within: value) ?? value.endIndex
+        return value[value.startIndex..<endIndex]
+    }
 }

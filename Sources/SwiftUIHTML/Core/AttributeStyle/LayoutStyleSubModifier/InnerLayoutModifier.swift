@@ -26,13 +26,13 @@ private extension InnerLayoutModifier {
            case "center":
                return .center
            case "left":
-               return .leading
+               return .topLeading
            case "right":
-               return .trailing
+               return .topTrailing
            default:
-               return .center
+               return .topLeading
            }
        }
-       return .center
+       return .topLeading
    }
 }

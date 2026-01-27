@@ -13,12 +13,15 @@ public struct HTMLNodeView: View {
     }
     
     public var body: some View {
-        HTMLBlock(
-            element: node.toElement(
-                configuration: configuration,
-                with: styleContainer
-            )
+        let element = node.toElement(
+            configuration: configuration,
+            with: styleContainer
         )
+        return HTMLBlock(element: element)
+            .modifier(
+                configuration.attributeStyle
+                    .eraseToAnyLayoutModifier(attributes: element.attributes)
+            )
     }
 }
 

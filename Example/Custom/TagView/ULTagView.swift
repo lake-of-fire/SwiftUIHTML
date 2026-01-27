@@ -25,7 +25,7 @@ struct ULTagView: BlockTag {
 
     func liTag(liElement: BlockElement) -> some View {
         HStack(alignment: .top, spacing: .zero) {
-            HTMLText(" • ")
+            HTMLText(" • ", applyVerticalPadding: false)
             VStack(alignment: .leading, spacing: 4) {
                 HTMLBlock(element: liElement)
             }

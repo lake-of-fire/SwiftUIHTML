@@ -59,6 +59,14 @@ enum AttachmentDebugLogger {
         return output
     }
 
+    static func readLogFile() -> String? {
+        lock.lock()
+        let url = logFileURL
+        lock.unlock()
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     static func clear() {
         lock.lock()
         buffer.removeAll(keepingCapacity: true)

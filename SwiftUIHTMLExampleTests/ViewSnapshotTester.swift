@@ -11,9 +11,9 @@ import Vision
 
 /// Utility class for rendering SwiftUI views in UIKit environment and generating snapshots
 class ViewSnapshotTester {
-    private static let diagnosticLogDirectory: URL = {
-        URL(fileURLWithPath: "/tmp/swiftuihtml-ios-diag", isDirectory: true)
-    }()
+    private static var diagnosticLogDirectory: URL {
+        artifactsRootURL().appendingPathComponent("diag", isDirectory: true)
+    }
 
     @MainActor
     static func snapshot<V: View>(
@@ -30,40 +30,73 @@ class ViewSnapshotTester {
     ) async throws {
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_LOGS")
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_MARGIN_LOGS")
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_INLINE_LOGS")
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_PARSER_LOGS")
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_BLOCK_LOGS")
+        setenv("SWIFTUIHTML_ATTACHMENT_LOGS", "1", 1)
+        setenv("SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS", "1", 1)
+        setenv("SWIFTUIHTML_MARGIN_LOGS", "1", 1)
+        setenv("SWIFTUIHTML_INLINE_LOGS", "1", 1)
+        setenv("SWIFTUIHTML_PARSER_LOGS", "1", 1)
+        setenv("SWIFTUIHTML_BLOCK_LOGS", "1", 1)
+        let artifactsURL = ensureSnapshotArtifactsDirectory(filePath: filePath)
+        AttachmentDebugLogger.record("[Snapshot] artifactsRoot=\(artifactsURL.path)")
+        rawLog("[Raw] artifactsRoot=\(artifactsURL.path)")
+        setenv(
+            "SWIFTUIHTML_ATTACHMENT_LOG_PATH",
+            artifactsURL.appendingPathComponent("swiftuihtml-attachment.log").path,
+            1
+        )
+        setenv("SWIFTUIHTML_ATTACHMENT_LOG_PRESERVE", "1", 1)
         AttachmentDebugLogger.clear()
+        rawLog("[Raw] snapshot start: \(testName)")
+        rawLog("[Raw] SNAPSHOT_ARTIFACTS=\(ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] ?? "nil")")
+        writeProbeFile(testName: testName, name: name)
+        writeLocationProbe(testName: testName, name: name)
         AttachmentDebugLogger.record("[TestHarness] snapshot start: \(testName)")
         let rootView = view.background(Color.white).compositingGroup().ignoresSafeArea()
         let hostingController = UIHostingController(rootView: rootView)
         let hostingView = hostingController.view!
 
-        let viewController = UIViewController()
-        viewController.view.addSubview(hostingView)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            hostingView.topAnchor.constraint(equalTo: viewController.view.topAnchor),
-            hostingView.leadingAnchor.constraint(equalTo: viewController.view.leadingAnchor)
-        ])
-
         let window = UIWindow(frame: UIScreen.main.bounds)
-        window.rootViewController = viewController
+        window.rootViewController = hostingController
         window.makeKeyAndVisible()
 
         try await Task.sleep(for: sleepDuration)
 
         await MainActor.run {
-            viewController.view.layoutIfNeeded()
-            viewController.view.setNeedsLayout()
+            hostingController.view.layoutIfNeeded()
+            hostingController.view.setNeedsLayout()
             hostingView.invalidateIntrinsicContentSize()
         }
 
         let resolvedSize = resolvedSize(for: hostingController, fallbackView: hostingView)
         AttachmentDebugLogger.record("[Snapshot] resolvedSize=\(resolvedSize)")
-        viewController.view.layoutIfNeeded()
+        rawLog("[Raw] resolvedSize=\(resolvedSize)")
+        hostingView.frame = CGRect(origin: .zero, size: resolvedSize)
+        hostingView.bounds = CGRect(origin: .zero, size: resolvedSize)
+        hostingController.view.layoutIfNeeded()
+        AttachmentDebugLogger.record(
+            "[Snapshot] hostingView bounds=\(hostingView.bounds) frame=\(hostingView.frame)"
+        )
+        rawLog("[Raw] hostingView bounds=\(hostingView.bounds) frame=\(hostingView.frame)")
 
         guard let renderedView = findActualRenderedView(in: hostingView) else {
             throw SnapshotError.viewNotFound
         }
         renderedView.layoutIfNeeded()
+        AttachmentDebugLogger.record(
+            "[Snapshot] renderedView type=\(String(describing: type(of: renderedView))) bounds=\(renderedView.bounds) frame=\(renderedView.frame)"
+        )
+        rawLog("[Raw] renderedView type=\(String(describing: type(of: renderedView))) bounds=\(renderedView.bounds) frame=\(renderedView.frame)")
+        let bounds = contentBounds(in: hostingView)
+        rawLog("[Raw] contentBounds=\(bounds)")
+        writeMetricsArtifact(
+            testName: testName,
+            name: name,
+            metrics: "resolvedSize=\(resolvedSize)\nhostingViewBounds=\(hostingView.bounds)\ncontentBounds=\(bounds)\n"
+        )
 
         let waitImages = await ImageLoadTracker.shared.waitUntilIdle(timeoutSeconds: 5)
         AttachmentDebugLogger.record("[Snapshot] imageLoadIdle=\(waitImages)")
@@ -71,13 +104,13 @@ class ViewSnapshotTester {
         AttachmentDebugLogger.record("[Snapshot] layoutIdle=\(waitLayout)")
         logImageViewDiagnostics(in: hostingView)
 
-        let snapshotting = Snapshotting<AnyView, UIImage>.image(
-            layout: .fixed(width: resolvedSize.width, height: resolvedSize.height)
-        )
+        let snapshotting = Snapshotting<UIView, UIImage>.image()
         let image = await snapshotImage(
-            of: AnyView(rootView),
+            of: renderedView,
             snapshotting: snapshotting
         )
+        rawLog("[Raw] captured image size=\(image.size) cg=\(image.cgImage != nil)")
+        logPixelMetrics(image: image, testName: testName, name: name)
         writeSnapshotArtifact(
             image: image,
             testName: testName,
@@ -91,13 +124,13 @@ class ViewSnapshotTester {
             name: name,
             filePath: filePath
         )
-        ensureSnapshotArtifactsDirectory(filePath: filePath)
+        let shouldRecord = recording ?? (ProcessInfo.processInfo.environment["SWIFTUIHTML_SNAPSHOT_RECORD"] == "1")
         let failure = await MainActor.run {
             verifySnapshot(
-                of: AnyView(rootView),
+                of: renderedView,
                 as: snapshotting,
                 named: name,
-                record: recording,
+                record: shouldRecord,
                 fileID: fileID,
                 file: filePath,
                 testName: testName,
@@ -115,6 +148,7 @@ class ViewSnapshotTester {
             )
         }
         AttachmentDebugLogger.record("[TestHarness] snapshot end: \(testName)")
+        rawLog("[Raw] snapshot end: \(testName)")
         attachDebugLogs(testName: testName, name: name)
     }
 
@@ -161,21 +195,6 @@ class ViewSnapshotTester {
         return image
     }
 
-    @MainActor
-    private static func snapshotImage<V: View>(
-        of view: V,
-        snapshotting: Snapshotting<V, UIImage>
-    ) async -> UIImage {
-        let expectation = XCTestExpectation(description: "snapshot image")
-        var result = UIImage()
-        snapshotting.snapshot(view).run { image in
-            result = image
-            expectation.fulfill()
-        }
-        _ = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
-        return result
-    }
-
     private static func contentBounds(in rootView: UIView) -> CGRect {
         var unionRect: CGRect = .null
         for view in allDescendants(of: rootView) {
@@ -215,6 +234,71 @@ class ViewSnapshotTester {
         return UIImage(cgImage: cropped, scale: scale, orientation: .up)
     }
 
+    private static func logPixelMetrics(image: UIImage, testName: String, name: String?) {
+        guard let cgImage = image.cgImage else { return }
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 1 && height > 1 else { return }
+
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let totalBytes = bytesPerRow * height
+        var buffer = [UInt8](repeating: 0, count: totalBytes)
+        guard let context = CGContext(
+            data: &buffer,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var minX = width
+        var minY = height
+        var maxX = -1
+        var maxY = -1
+        var nonWhiteCount = 0
+        let threshold: UInt8 = 250
+        for y in 0..<height {
+            let rowOffset = y * bytesPerRow
+            for x in 0..<width {
+                let offset = rowOffset + x * bytesPerPixel
+                let r = buffer[offset]
+                let g = buffer[offset + 1]
+                let b = buffer[offset + 2]
+                let a = buffer[offset + 3]
+                if a <= 10 { continue }
+                if r < threshold || g < threshold || b < threshold {
+                    nonWhiteCount += 1
+                    if x < minX { minX = x }
+                    if x > maxX { maxX = x }
+                    if y < minY { minY = y }
+                    if y > maxY { maxY = y }
+                }
+            }
+        }
+
+        let label = sanitizePathComponent(testName)
+        let ident = sanitizePathComponent(name ?? "1")
+        if maxX >= minX && maxY >= minY {
+            let top = minY
+            let left = minX
+            let bottom = (height - 1) - maxY
+            let right = (width - 1) - maxX
+            let inkRatio = Double(nonWhiteCount) / Double(width * height)
+            let inkString = String(format: "%.4f", inkRatio)
+            let line = "[PixelMetrics] \(label).\(ident) size=\(width)x\(height) top=\(top) left=\(left) bottom=\(bottom) right=\(right) ink=\(inkString)"
+            print(line)
+            AttachmentDebugLogger.record(line)
+        } else {
+            let line = "[PixelMetrics] \(label).\(ident) size=\(width)x\(height) no-nonwhite"
+            print(line)
+            AttachmentDebugLogger.record(line)
+        }
+    }
+
     private static func recordIssue(
         _ message: String,
         fileID: StaticString,
@@ -223,6 +307,21 @@ class ViewSnapshotTester {
         column: UInt
     ) {
         XCTFail(message, file: filePath, line: line)
+    }
+
+    @MainActor
+    private static func snapshotImage<Value>(
+        of value: Value,
+        snapshotting: Snapshotting<Value, UIImage>
+    ) async -> UIImage {
+        let expectation = XCTestExpectation(description: "snapshot image")
+        var result = UIImage()
+        snapshotting.snapshot(value).run { image in
+            result = image
+            expectation.fulfill()
+        }
+        _ = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
+        return result
     }
 
     private static func logImageViewDiagnostics(in rootView: UIView) {
@@ -335,27 +434,62 @@ class ViewSnapshotTester {
     }
 
 
-    private static func ensureSnapshotArtifactsDirectory(filePath: StaticString) {
-        if ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] != nil {
-            return
+    private static func ensureSnapshotArtifactsDirectory(filePath: StaticString) -> URL {
+        if let existing = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"],
+           !existing.isEmpty {
+            return URL(fileURLWithPath: existing, isDirectory: true)
         }
-        let artifactsUrl = URL(fileURLWithPath: "/tmp/swiftuihtml-ios-artifacts", isDirectory: true)
+        let artifactsUrl = artifactsRootURL()
         do {
             try FileManager.default.createDirectory(at: artifactsUrl, withIntermediateDirectories: true)
             setenv("SNAPSHOT_ARTIFACTS", artifactsUrl.path, 1)
         } catch {
             // If we cannot create the folder, continue without overriding SNAPSHOT_ARTIFACTS.
+            AttachmentDebugLogger.record("[Snapshot] artifactsRoot create failed \(error.localizedDescription) path=\(artifactsUrl.path)")
+            rawLog("[Raw] artifactsRoot create failed \(error.localizedDescription) path=\(artifactsUrl.path)")
         }
+        return artifactsUrl
+    }
+
+    private static func artifactsRootURL() -> URL {
+        if let existing = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"],
+           !existing.isEmpty {
+            return URL(fileURLWithPath: existing, isDirectory: true)
+        }
+        let tempRoot = FileManager.default.temporaryDirectory
+        if !tempRoot.path.isEmpty {
+            return tempRoot.appendingPathComponent("swiftuihtml-ios-artifacts", isDirectory: true)
+        }
+        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            return documents.appendingPathComponent("swiftuihtml-ios-artifacts", isDirectory: true)
+        }
+        return URL(fileURLWithPath: "/tmp/swiftuihtml-ios-artifacts", isDirectory: true)
     }
 
     private static func attachDebugLogs(testName: String, name: String?) {
-        let logs = AttachmentDebugLogger.dump()
+        let bufferLogs = AttachmentDebugLogger.dump()
+        let fileLogs = AttachmentDebugLogger.readLogFile()
+        let logs = bufferLogs.isEmpty ? (fileLogs ?? "") : bufferLogs
         guard !logs.isEmpty else { return }
         print("SWIFTUIHTML_ATTACHMENT_LOGS_BEGIN")
         print(logs)
         print("SWIFTUIHTML_ATTACHMENT_LOGS_END")
         let logURL = snapshotLogURL(testName: testName, name: name)
         appendDiagnosticLog(logs, to: logURL)
+        if let artifactsPath = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"] {
+            let artifactsURL = URL(fileURLWithPath: artifactsPath, isDirectory: true)
+            let safeTestName = sanitizePathComponent(testName)
+            let identifier = sanitizePathComponent(name ?? "1")
+            let filename = "\(safeTestName).\(identifier).attachment.log"
+            let artifactURL = artifactsURL.appendingPathComponent(filename)
+            appendDiagnosticLog(logs, to: artifactURL)
+            writeAttachmentFrameLog(
+                logs: logs,
+                testName: safeTestName,
+                identifier: identifier,
+                artifactsURL: artifactsURL
+            )
+        }
         let attachment = XCTAttachment(string: logs)
         attachment.name = "SwiftUIHTML Attachment Layout Logs"
         attachment.lifetime = .keepAlways
@@ -395,6 +529,120 @@ class ViewSnapshotTester {
         }
     }
 
+    private static func writeAttachmentFrameLog(
+        logs: String,
+        testName: String,
+        identifier: String,
+        artifactsURL: URL
+    ) {
+        let filtered = logs
+            .split(separator: "\n")
+            .filter {
+                $0.contains("attachmentFrame id=")
+                    || $0.contains("attachmentLineRelative id=")
+                    || $0.contains("attachmentSize id=")
+            }
+        guard !filtered.isEmpty else { return }
+        let filename = "\(testName).\(identifier).attachment.frames.log"
+        let url = artifactsURL.appendingPathComponent(filename)
+        let payload = filtered.joined(separator: "\n") + "\n"
+        do {
+            try payload.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            AttachmentDebugLogger.record("[Snapshot] attachment frame log write failed \(error.localizedDescription)")
+        }
+    }
+
+    private static func rawLog(_ message: String) {
+        let line = message + "\n"
+        if let data = line.data(using: .utf8) {
+            try? FileHandle.standardError.write(contentsOf: data)
+            let url = artifactsRootURL().appendingPathComponent("swiftuihtml-raw.log")
+            if let handle = try? FileHandle(forWritingTo: url) {
+                handle.seekToEndOfFile()
+                try? handle.write(contentsOf: data)
+                try? handle.close()
+            } else {
+                try? data.write(to: url)
+            }
+            if let artifactsPath = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"], !artifactsPath.isEmpty {
+                let artifactsURL = URL(fileURLWithPath: artifactsPath, isDirectory: true)
+                try? FileManager.default.createDirectory(at: artifactsURL, withIntermediateDirectories: true)
+                let rawURL = artifactsURL.appendingPathComponent("swiftuihtml-raw.log")
+                if let handle = try? FileHandle(forWritingTo: rawURL) {
+                    handle.seekToEndOfFile()
+                    try? handle.write(contentsOf: data)
+                    try? handle.close()
+                } else {
+                    try? data.write(to: rawURL)
+                }
+            }
+        }
+    }
+
+    private static func writeProbeFile(testName: String, name: String?) {
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let dir = artifactsRootURL()
+            .appendingPathComponent("HTMLBasicTests")
+        let url = dir.appendingPathComponent("_probe_\(safeTestName).\(identifier).\(timestamp).txt")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try "probe \(timestamp)".write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            rawLog("[Raw] probe write failed \(error.localizedDescription)")
+        }
+    }
+
+    private static func writeLocationProbe(testName: String, name: String?) {
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+        let timestamp = Int(Date().timeIntervalSince1970)
+        let filename = "_location_probe_\(safeTestName).\(identifier).\(timestamp).txt"
+        var locations: [URL] = []
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        locations.append(tempURL)
+        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            locations.append(documents.appendingPathComponent(filename))
+        }
+        for url in locations {
+            do {
+                try "probe \(timestamp)".write(to: url, atomically: true, encoding: .utf8)
+                AttachmentDebugLogger.record("[Snapshot] locationProbe wrote \(url.path)")
+                rawLog("[Raw] locationProbe wrote \(url.path)")
+                print("SWIFTUIHTML_LOCATION_PROBE_WROTE \(url.path)")
+            } catch {
+                AttachmentDebugLogger.record("[Snapshot] locationProbe failed \(error.localizedDescription) path=\(url.path)")
+                rawLog("[Raw] locationProbe failed \(error.localizedDescription) path=\(url.path)")
+                print("SWIFTUIHTML_LOCATION_PROBE_FAILED \(error.localizedDescription) path=\(url.path)")
+            }
+        }
+    }
+
+    private static func writeMetricsArtifact(testName: String, name: String?, metrics: String) {
+        let safeTestName = sanitizePathComponent(testName)
+        let identifier = sanitizePathComponent(name ?? "1")
+        let root = ProcessInfo.processInfo.environment["SNAPSHOT_ARTIFACTS"]
+            ?? "/tmp/swiftuihtml-ios-artifacts"
+        let dir = URL(fileURLWithPath: root, isDirectory: true)
+            .appendingPathComponent("HTMLBasicTests")
+        let url = dir.appendingPathComponent("\(safeTestName).\(identifier).metrics.txt")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try metrics.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            rawLog("[Raw] metrics write failed \(error.localizedDescription)")
+        }
+        guard NSClassFromString("XCTestCase") != nil else { return }
+        let attachment = XCTAttachment(string: metrics)
+        attachment.name = "\(safeTestName).\(identifier).metrics"
+        attachment.lifetime = .keepAlways
+        XCTContext.runActivity(named: "Snapshot Metrics") { activity in
+            activity.add(attachment)
+        }
+    }
+
     private static func performOCRDebug(
         image: UIImage,
         testName: String,
@@ -406,17 +654,28 @@ class ViewSnapshotTester {
         guard shouldOCR else { return }
         let safeTestName = sanitizePathComponent(testName)
         let identifier = sanitizePathComponent(name ?? "1")
+        let ocrRoot: String = {
+            let root = artifactsRootURL()
+            return root.appendingPathComponent("ocr", isDirectory: true).path
+        }()
 
         guard let newStats = ocrStats(for: image, label: "new") else { return }
         AttachmentDebugLogger.record(
-            "[OCR] new textRectCount=\(newStats.count) topPadding=\(newStats.topPadding) bottomPadding=\(newStats.bottomPadding) imageSize=\(newStats.imageSize)"
+            "[OCR] new textRectCount=\(newStats.count) topPadding=\(newStats.topPadding) bottomPadding=\(newStats.bottomPadding) leftPadding=\(newStats.leftPadding) rightPadding=\(newStats.rightPadding) imageSize=\(newStats.imageSize)"
         )
+        writeOCRDump(stats: newStats, testName: safeTestName, identifier: identifier, label: "new", outputDir: ocrRoot)
         saveOCROverlay(
             image: image,
             rects: newStats.rects,
-            outputDir: "/tmp/swiftuihtml-ocr/ios",
+            outputDir: ocrRoot,
             filename: "\(safeTestName).\(identifier).ocr.png"
         )
+        if let newRectStats = textRectStats(for: image, label: "new-rects") {
+            AttachmentDebugLogger.record(
+                "[OCR] new-rects count=\(newRectStats.count) topPadding=\(newRectStats.topPadding) bottomPadding=\(newRectStats.bottomPadding) leftPadding=\(newRectStats.leftPadding) rightPadding=\(newRectStats.rightPadding) imageSize=\(newRectStats.imageSize)"
+            )
+            writeOCRDump(stats: newRectStats, testName: safeTestName, identifier: identifier, label: "new-rects", outputDir: ocrRoot)
+        }
 
         if let baselineImage = loadBaselineImage(
             filePath: filePath,
@@ -425,15 +684,32 @@ class ViewSnapshotTester {
         ), let baselineStats = ocrStats(for: baselineImage, label: "baseline") {
             let deltaTop = newStats.topPadding - baselineStats.topPadding
             let deltaBottom = newStats.bottomPadding - baselineStats.bottomPadding
+            let deltaLeft = newStats.leftPadding - baselineStats.leftPadding
+            let deltaRight = newStats.rightPadding - baselineStats.rightPadding
             AttachmentDebugLogger.record(
-                "[OCR] baseline textRectCount=\(baselineStats.count) topPadding=\(baselineStats.topPadding) bottomPadding=\(baselineStats.bottomPadding) imageSize=\(baselineStats.imageSize) deltaTop=\(deltaTop) deltaBottom=\(deltaBottom)"
+                "[OCR] baseline textRectCount=\(baselineStats.count) topPadding=\(baselineStats.topPadding) bottomPadding=\(baselineStats.bottomPadding) leftPadding=\(baselineStats.leftPadding) rightPadding=\(baselineStats.rightPadding) imageSize=\(baselineStats.imageSize) deltaTop=\(deltaTop) deltaBottom=\(deltaBottom) deltaLeft=\(deltaLeft) deltaRight=\(deltaRight)"
+            )
+            writeOCRDump(stats: baselineStats, testName: safeTestName, identifier: identifier, label: "baseline", outputDir: ocrRoot)
+            logOCRLineDeltas(newStats: newStats, baselineStats: baselineStats)
+            writeOCRLineDeltaReport(
+                newStats: newStats,
+                baselineStats: baselineStats,
+                testName: safeTestName,
+                identifier: identifier,
+                outputDir: ocrRoot
             )
             saveOCROverlay(
                 image: baselineImage,
                 rects: baselineStats.rects,
-                outputDir: "/tmp/swiftuihtml-ocr/ios-baseline",
+                outputDir: ocrRoot + "-baseline",
                 filename: "\(safeTestName).\(identifier).baseline.ocr.png"
             )
+            if let baseRectStats = textRectStats(for: baselineImage, label: "baseline-rects") {
+                AttachmentDebugLogger.record(
+                    "[OCR] baseline-rects count=\(baseRectStats.count) topPadding=\(baseRectStats.topPadding) bottomPadding=\(baseRectStats.bottomPadding) leftPadding=\(baseRectStats.leftPadding) rightPadding=\(baseRectStats.rightPadding) imageSize=\(baseRectStats.imageSize)"
+                )
+                writeOCRDump(stats: baseRectStats, testName: safeTestName, identifier: identifier, label: "baseline-rects", outputDir: ocrRoot)
+            }
         } else {
             AttachmentDebugLogger.record("[OCR] baseline image missing for \(safeTestName).\(identifier)")
         }
@@ -462,8 +738,83 @@ class ViewSnapshotTester {
         if observations.isEmpty {
             return OCRStats(
                 rects: [],
+                texts: [],
                 topPadding: 0,
                 bottomPadding: 0,
+                leftPadding: 0,
+                rightPadding: 0,
+                imageSize: CGSize(width: cgImage.width, height: cgImage.height)
+            )
+        }
+
+        let imageWidth = CGFloat(cgImage.width)
+        let imageHeight = CGFloat(cgImage.height)
+
+        var rects: [CGRect] = []
+        var texts: [String] = []
+        rects.reserveCapacity(observations.count)
+        texts.reserveCapacity(observations.count)
+        for observation in observations {
+            let bbox = observation.boundingBox
+            let rect = CGRect(
+                x: bbox.minX * imageWidth,
+                y: (1 - bbox.maxY) * imageHeight,
+                width: bbox.width * imageWidth,
+                height: bbox.height * imageHeight
+            )
+            rects.append(rect)
+            if let candidate = observation.topCandidates(1).first {
+                texts.append(candidate.string)
+            } else {
+                texts.append("")
+            }
+        }
+
+        let minY = rects.map(\.minY).min() ?? 0
+        let maxY = rects.map(\.maxY).max() ?? 0
+        let minX = rects.map(\.minX).min() ?? 0
+        let maxX = rects.map(\.maxX).max() ?? 0
+        let topPadding = minY
+        let bottomPadding = max(0, imageHeight - maxY)
+        let leftPadding = minX
+        let rightPadding = max(0, imageWidth - maxX)
+        return OCRStats(
+            rects: rects,
+            texts: texts,
+            topPadding: topPadding,
+            bottomPadding: bottomPadding,
+            leftPadding: leftPadding,
+            rightPadding: rightPadding,
+            imageSize: CGSize(width: imageWidth, height: imageHeight)
+        )
+    }
+
+    private static func textRectStats(for image: UIImage, label: String) -> OCRStats? {
+        guard let cgImage = image.cgImage else {
+            AttachmentDebugLogger.record("[OCR] missing CGImage (\(label))")
+            return nil
+        }
+
+        let request = VNDetectTextRectanglesRequest()
+        request.reportCharacterBoxes = false
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            AttachmentDebugLogger.record("[OCR] rect request failed \(error.localizedDescription)")
+            return nil
+        }
+
+        let observations = request.results as? [VNTextObservation] ?? []
+        if observations.isEmpty {
+            return OCRStats(
+                rects: [],
+                texts: [],
+                topPadding: 0,
+                bottomPadding: 0,
+                leftPadding: 0,
+                rightPadding: 0,
                 imageSize: CGSize(width: cgImage.width, height: cgImage.height)
             )
         }
@@ -484,14 +835,22 @@ class ViewSnapshotTester {
             rects.append(rect)
         }
 
+        let minX = rects.map(\.minX).min() ?? 0
         let minY = rects.map(\.minY).min() ?? 0
+        let maxX = rects.map(\.maxX).max() ?? 0
         let maxY = rects.map(\.maxY).max() ?? 0
         let topPadding = minY
         let bottomPadding = max(0, imageHeight - maxY)
+        let leftPadding = minX
+        let rightPadding = max(0, imageWidth - maxX)
+
         return OCRStats(
             rects: rects,
+            texts: Array(repeating: "", count: rects.count),
             topPadding: topPadding,
             bottomPadding: bottomPadding,
+            leftPadding: leftPadding,
+            rightPadding: rightPadding,
             imageSize: CGSize(width: imageWidth, height: imageHeight)
         )
     }
@@ -589,6 +948,23 @@ class ViewSnapshotTester {
         } catch {
             AttachmentDebugLogger.record("[Snapshot] artifact write failed \(error.localizedDescription)")
         }
+        guard NSClassFromString("XCTestCase") != nil else { return }
+        if let data = image.pngData() {
+            let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.png")
+            attachment.name = "\(safeTestName).\(identifier).png"
+            attachment.lifetime = .keepAlways
+            XCTContext.runActivity(named: "Snapshot Image") { activity in
+                activity.add(attachment)
+            }
+        }
+        if let html, !html.isEmpty {
+            let attachment = XCTAttachment(string: html)
+            attachment.name = "\(safeTestName).\(identifier).html"
+            attachment.lifetime = .keepAlways
+            XCTContext.runActivity(named: "Snapshot HTML") { activity in
+                activity.add(attachment)
+            }
+        }
     }
 
     private static func loadBaselineImage(
@@ -609,11 +985,209 @@ class ViewSnapshotTester {
 
     private struct OCRStats {
         let rects: [CGRect]
+        let texts: [String]
         let topPadding: CGFloat
         let bottomPadding: CGFloat
+        let leftPadding: CGFloat
+        let rightPadding: CGFloat
         let imageSize: CGSize
 
         var count: Int { rects.count }
+    }
+
+    private struct OCRLine: Codable {
+        let index: Int
+        let rect: RectDTO
+        let text: String
+    }
+
+    private struct RectDTO: Codable {
+        let x: Double
+        let y: Double
+        let w: Double
+        let h: Double
+    }
+
+    private struct OCRDump: Codable {
+        let label: String
+        let imageWidth: Double
+        let imageHeight: Double
+        let topPadding: Double
+        let bottomPadding: Double
+        let leftPadding: Double
+        let rightPadding: Double
+        let lines: [OCRLine]
+    }
+
+    private struct OCRLineDeltaReport: Codable {
+        let label: String
+        let count: Int
+        let deltas: [OCRLineDelta]
+    }
+
+    private struct OCRLineDelta: Codable {
+        let index: Int
+        let newRect: RectDTO
+        let baselineRect: RectDTO
+        let deltaX: Double
+        let deltaY: Double
+        let text: String
+    }
+
+    private static func writeOCRDump(
+        stats: OCRStats,
+        testName: String,
+        identifier: String,
+        label: String,
+        outputDir: String
+    ) {
+        let lines = clusterLines(rects: stats.rects, texts: stats.texts)
+        let payload = OCRDump(
+            label: label,
+            imageWidth: Double(stats.imageSize.width),
+            imageHeight: Double(stats.imageSize.height),
+            topPadding: Double(stats.topPadding),
+            bottomPadding: Double(stats.bottomPadding),
+            leftPadding: Double(stats.leftPadding),
+            rightPadding: Double(stats.rightPadding),
+            lines: lines.enumerated().map { index, line in
+                OCRLine(
+                    index: index,
+                    rect: RectDTO(
+                        x: Double(line.rect.origin.x),
+                        y: Double(line.rect.origin.y),
+                        w: Double(line.rect.size.width),
+                        h: Double(line.rect.size.height)
+                    ),
+                    text: line.text
+                )
+            }
+        )
+        let outputURL = URL(fileURLWithPath: outputDir, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+            let fileURL = outputURL.appendingPathComponent("\(testName).\(identifier).\(label).lines.json")
+            let data = try JSONEncoder().encode(payload)
+            try data.write(to: fileURL, options: .atomic)
+            AttachmentDebugLogger.record("[OCR] lines json saved \(fileURL.path)")
+        } catch {
+            AttachmentDebugLogger.record("[OCR] lines json write failed \(error.localizedDescription)")
+        }
+    }
+
+    private static func logOCRLineDeltas(newStats: OCRStats, baselineStats: OCRStats) {
+        let newLines = clusterLines(rects: newStats.rects, texts: newStats.texts)
+        let baseLines = clusterLines(rects: baselineStats.rects, texts: baselineStats.texts)
+        guard !newLines.isEmpty, !baseLines.isEmpty else { return }
+        let count = min(newLines.count, baseLines.count)
+        var samples: [String] = []
+        for index in 0..<min(count, 8) {
+            let newRect = newLines[index].rect
+            let baseRect = baseLines[index].rect
+            let delta = newRect.minY - baseRect.minY
+            samples.append("line\(index) dy=\(String(format: "%.2f", delta))")
+        }
+        AttachmentDebugLogger.record("[OCR] lineDeltaSamples \(samples.joined(separator: ", ")) totalNew=\(newLines.count) totalBase=\(baseLines.count)")
+    }
+
+    private static func writeOCRLineDeltaReport(
+        newStats: OCRStats,
+        baselineStats: OCRStats,
+        testName: String,
+        identifier: String,
+        outputDir: String
+    ) {
+        let newLines = clusterLines(rects: newStats.rects, texts: newStats.texts)
+        let baseLines = clusterLines(rects: baselineStats.rects, texts: baselineStats.texts)
+        guard !newLines.isEmpty, !baseLines.isEmpty else { return }
+        let count = min(newLines.count, baseLines.count)
+        let deltas: [OCRLineDelta] = (0..<count).map { index in
+            let newLine = newLines[index]
+            let baseLine = baseLines[index]
+            return OCRLineDelta(
+                index: index,
+                newRect: RectDTO(
+                    x: Double(newLine.rect.origin.x),
+                    y: Double(newLine.rect.origin.y),
+                    w: Double(newLine.rect.size.width),
+                    h: Double(newLine.rect.size.height)
+                ),
+                baselineRect: RectDTO(
+                    x: Double(baseLine.rect.origin.x),
+                    y: Double(baseLine.rect.origin.y),
+                    w: Double(baseLine.rect.size.width),
+                    h: Double(baseLine.rect.size.height)
+                ),
+                deltaX: Double(newLine.rect.minX - baseLine.rect.minX),
+                deltaY: Double(newLine.rect.minY - baseLine.rect.minY),
+                text: newLine.text
+            )
+        }
+        let payload = OCRLineDeltaReport(
+            label: "line-deltas",
+            count: count,
+            deltas: deltas
+        )
+        let outputURL = URL(fileURLWithPath: outputDir, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+            let fileURL = outputURL.appendingPathComponent("\(testName).\(identifier).line-deltas.json")
+            let data = try JSONEncoder().encode(payload)
+            try data.write(to: fileURL, options: .atomic)
+            AttachmentDebugLogger.record("[OCR] line-deltas json saved \(fileURL.path)")
+        } catch {
+            AttachmentDebugLogger.record("[OCR] line-deltas json write failed \(error.localizedDescription)")
+        }
+    }
+
+    private struct LineCluster {
+        let rect: CGRect
+        let text: String
+    }
+
+    private static func clusterLines(rects: [CGRect], texts: [String]) -> [LineCluster] {
+        guard !rects.isEmpty else { return [] }
+        let pairs = zip(rects, texts)
+            .map { (rect: $0.0, text: $0.1) }
+            .sorted { $0.rect.minY < $1.rect.minY }
+        var lines: [LineCluster] = []
+        var currentRects: [CGRect] = []
+        var currentTexts: [String] = []
+        var currentMidY: CGFloat?
+        for pair in pairs {
+            let midY = pair.rect.midY
+            if let current = currentMidY {
+                let threshold = max(4, pair.rect.height * 0.6)
+                if abs(midY - current) <= threshold {
+                    currentRects.append(pair.rect)
+                    currentTexts.append(pair.text)
+                } else {
+                    lines.append(makeLineCluster(rects: currentRects, texts: currentTexts))
+                    currentRects = [pair.rect]
+                    currentTexts = [pair.text]
+                    currentMidY = midY
+                }
+            } else {
+                currentRects = [pair.rect]
+                currentTexts = [pair.text]
+                currentMidY = midY
+            }
+        }
+        if !currentRects.isEmpty {
+            lines.append(makeLineCluster(rects: currentRects, texts: currentTexts))
+        }
+        return lines
+    }
+
+    private static func makeLineCluster(rects: [CGRect], texts: [String]) -> LineCluster {
+        var union = rects.first ?? .zero
+        for rect in rects.dropFirst() {
+            union = union.union(rect)
+        }
+        let joined = texts
+            .filter { !$0.isEmpty }
+            .joined(separator: " | ")
+        return LineCluster(rect: union, text: joined)
     }
 }
 #endif

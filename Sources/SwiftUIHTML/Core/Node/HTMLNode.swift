@@ -1,5 +1,10 @@
 //  Copyright © 2024 PRND. All rights reserved.
 import Foundation
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 
 public struct HTMLNode: Equatable, Sendable {
@@ -164,6 +169,25 @@ private extension HTMLNode {
         if let font = styleContainer.uiFont {
             result["ruby-font-name"] = AttributeValue(rawValue: font.fontName)
             result["ruby-font-size"] = AttributeValue(rawValue: "\(font.pointSize)")
+#if os(macOS)
+            let traits = font.fontDescriptor.object(forKey: .traits) as? [NSFontDescriptor.TraitKey: Any]
+            if let weight = traits?[.weight] as? NSNumber {
+                result["ruby-font-weight"] = AttributeValue(rawValue: "\(weight.doubleValue)")
+            }
+            let symbolic = font.fontDescriptor.symbolicTraits
+            if symbolic.contains(.italic) {
+                result["ruby-font-italic"] = AttributeValue(rawValue: "1")
+            }
+#else
+            let traits = font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+            if let weight = traits?[.weight] as? NSNumber {
+                result["ruby-font-weight"] = AttributeValue(rawValue: "\(weight.doubleValue)")
+            }
+            let symbolic = font.fontDescriptor.symbolicTraits
+            if symbolic.contains(.traitItalic) {
+                result["ruby-font-italic"] = AttributeValue(rawValue: "1")
+            }
+#endif
         }
 
         if let annotationStyle = rubyAnnotationStyle(from: children, baseFont: styleContainer.uiFont) {
@@ -172,6 +196,9 @@ private extension HTMLNode {
             }
             if let name = annotationStyle.name {
                 result["ruby-annotation-font-name"] = AttributeValue(rawValue: name)
+            }
+            if let color = annotationStyle.color {
+                result["ruby-annotation-color"] = AttributeValue(rawValue: color)
             }
         }
 
@@ -212,9 +239,10 @@ private extension HTMLNode {
         return position
     }
 
-    func rubyAnnotationStyle(from children: [HTMLChild], baseFont: PlatformFont?) -> (size: CGFloat?, name: String?)? {
+    func rubyAnnotationStyle(from children: [HTMLChild], baseFont: PlatformFont?) -> (size: CGFloat?, name: String?, color: String?)? {
         var size: CGFloat?
         var name: String?
+        var color: String?
         func scanRTStyles(in node: HTMLNode) {
             guard node.tag == "rt" else {
                 for child in node.children {
@@ -235,6 +263,9 @@ private extension HTMLNode {
                     name = font.fontName
                 }
             }
+            if color == nil, let raw = cssStyle["color"]?.string {
+                color = raw
+            }
         }
 
         for child in children {
@@ -244,10 +275,10 @@ private extension HTMLNode {
                 break
             }
         }
-        if size == nil && name == nil {
+        if size == nil && name == nil && color == nil {
             return nil
         }
-        return (size, name)
+        return (size, name, color)
     }
 
     func rubyComponents(from children: [HTMLChild]) -> (base: String?, ruby: String?) {
@@ -270,6 +301,28 @@ private extension HTMLNode {
         }
 
         func scanRubyText(in node: HTMLNode) {
+            if node.tag == "rp" {
+                return
+            }
+            if node.tag == "rtc" {
+                var buffer = ""
+                var hasRTChild = false
+                for child in node.children {
+                    switch child {
+                    case let .text(text):
+                        buffer.append(text)
+                    case let .node(childNode):
+                        if childNode.tag == "rt" {
+                            hasRTChild = true
+                        }
+                        scanRubyText(in: childNode)
+                    }
+                }
+                if !hasRTChild, !buffer.isEmpty {
+                    appendRubyText(buffer)
+                }
+                return
+            }
             if node.tag == "rt" {
                 var rubyBuffer = ""
                 rubyBuffer.reserveCapacity(16)
@@ -287,9 +340,10 @@ private extension HTMLNode {
         func scanBaseText(in node: HTMLNode) {
             switch node.tag {
             case "rb":
-                let before = rbText.count
-                node.appendPlainText(into: &rbText)
-                if rbText.count > before {
+                var buffer = ""
+                node.appendPlainText(into: &buffer)
+                if !buffer.isEmpty {
+                    rbText.append(contentsOf: normalizedRubyBaseWhitespace(buffer))
                     hasBase = true
                     hasRB = true
                 }
@@ -298,7 +352,7 @@ private extension HTMLNode {
                     switch child {
                     case let .text(text):
                         if !text.isEmpty {
-                            baseText.append(text)
+                            baseText.append(contentsOf: normalizedRubyBaseWhitespace(text))
                             hasBase = true
                         }
                     case let .node(childNode):
@@ -306,9 +360,10 @@ private extension HTMLNode {
                     }
                 }
             default:
-                let before = baseText.count
-                node.appendPlainText(into: &baseText)
-                if baseText.count > before {
+                var buffer = ""
+                node.appendPlainText(into: &buffer)
+                if !buffer.isEmpty {
+                    baseText.append(contentsOf: normalizedRubyBaseWhitespace(buffer))
                     hasBase = true
                 }
             }
@@ -355,6 +410,10 @@ private extension HTMLNode {
             }
         }
         return output
+    }
+
+    private func normalizedRubyBaseWhitespace(_ text: String) -> String {
+        normalizedRubyWhitespace(text[...])
     }
 
     func plainText() -> String {

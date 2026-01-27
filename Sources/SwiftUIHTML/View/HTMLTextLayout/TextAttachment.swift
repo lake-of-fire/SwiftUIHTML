@@ -93,17 +93,23 @@ final class TextAttachment: NSTextAttachment {
             let lineHeight = lineHeightOverride ?? textLine?.lineHeight ?? fontHeight
             let ascent = metrics?.ascent ?? fontHeight
             let descent = metrics?.descent ?? max(0, fontHeight - ascent)
-#if os(macOS)
-            let adjusted = CGPoint(x: point.x, y: point.y)
-#else
-            let adjusted = CGPoint(x: point.x, y: point.y - ascent)
-#endif
+            let extraBelow: CGFloat
+            if let metrics {
+                switch metrics.position {
+                case .after: extraBelow = metrics.extra
+                case .before: extraBelow = 0
+                default: extraBelow = metrics.extra / 2
+                }
+            } else {
+                extraBelow = 0
+            }
+            let adjusted = CGPoint(x: point.x, y: point.y - extraBelow)
             if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
                 || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
                 || NSClassFromString("XCTestCase") != nil {
                 let rubyPosition = metrics.map { Int($0.position.rawValue) } ?? -1
                 AttachmentDebugLogger.record(
-                    "[Attachment][Ruby] offset key=\(key) point=\(point) boundsH=\(bounds.size.height) fontHeight=\(fontHeight) lineHeight=\(lineHeight) ascent=\(ascent) descent=\(descent) extra=\(metrics?.extra ?? -1) position=\(rubyPosition) adjusted=\(adjusted)"
+                    "[Attachment][Ruby] offset key=\(key) point=\(point) boundsH=\(bounds.size.height) fontHeight=\(fontHeight) lineHeight=\(lineHeight) ascent=\(ascent) descent=\(descent) extra=\(metrics?.extra ?? -1) position=\(rubyPosition) extraBelow=\(extraBelow) adjusted=\(adjusted)"
                 )
             }
             return adjusted
@@ -162,7 +168,8 @@ extension TextAttachment {
         let ctFont = font.manabiCTFont
         let baseAscent = CTFontGetAscent(ctFont)
         let baseDescent = CTFontGetDescent(ctFont)
-        let baseHeight = baseAscent + baseDescent
+        let baseLeading = CTFontGetLeading(ctFont)
+        let baseHeight = baseAscent + baseDescent + baseLeading
         let extra = max(0, bounds.size.height - baseHeight)
         let position = rubyPosition
         let extraAbove: CGFloat

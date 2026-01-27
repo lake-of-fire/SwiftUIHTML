@@ -9,6 +9,7 @@ import UIKit
 
 public struct RubyTag: InlineAttachmentTag {
     public let attributes: [String: AttributeValue]
+    @HTMLEnvironment(\.styleContainer) private var styleContainer
 
     public init(attributes: [String : AttributeValue]) {
         self.attributes = attributes
@@ -22,7 +23,9 @@ public struct RubyTag: InlineAttachmentTag {
             rubyFont: rubyFont,
             rubyPosition: rubyPosition,
             rubyScale: rubyScale,
-            foregroundColor: foregroundColor
+            foregroundColor: foregroundColor,
+            rubyAnnotationColor: rubyAnnotationColor,
+            hasExplicitRubyAnnotationFont: hasExplicitRubyAnnotationFont
         )
     }
 }
@@ -79,15 +82,37 @@ private extension RubyTag {
 
     var baseFont: PlatformFont? {
         if let size = attributes["ruby-font-size"]?.cgFloat {
-            if let fontName = attributes["ruby-font-name"]?.string,
-               let font = PlatformFont(name: fontName, size: size) {
-                return font
+            if let fontName = attributes["ruby-font-name"]?.string {
+                if fontName.hasPrefix(".") || fontName.contains("SFUI") || fontName.contains("SFNS") {
+                    let weight = rubyFontWeight()
+                    let italic = rubyFontItalic()
+                    let system = PlatformFont.systemFont(ofSize: size, weight: weight)
+                    if italic, let withItalic = system.withItalicTrait() {
+                        return withItalic
+                    }
+                    return system
+                }
+                if let font = PlatformFont(name: fontName, size: size) {
+                    return font
+                }
             }
-            return PlatformFont.systemFont(ofSize: size)
+            if let envFont = styleContainer.uiFont {
+                return envFont.withSize(size)
+            }
+            let weight = rubyFontWeight()
+            let italic = rubyFontItalic()
+            let system = PlatformFont.systemFont(ofSize: size, weight: weight)
+            if italic, let withItalic = system.withItalicTrait() {
+                return withItalic
+            }
+            return system
         }
 
-        let font = CSSFontUtility.createFont(fromCSSStyle: cssStyle, currentFont: nil)
-        if let font {
+        let hasCSSFont = cssStyle["font"] != nil
+            || cssStyle["font-size"] != nil
+            || cssStyle["font-family"] != nil
+        if hasCSSFont,
+           let font = CSSFontUtility.createFont(fromCSSStyle: cssStyle, currentFont: styleContainer.uiFont) {
             return font
         }
 
@@ -96,6 +121,9 @@ private extension RubyTag {
             return PlatformFont.systemFont(ofSize: resolvedSize)
         }
 
+        if let envFont = styleContainer.uiFont {
+            return envFont
+        }
         return PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)
     }
 
@@ -115,6 +143,33 @@ private extension RubyTag {
         }
         return PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize * rubyScale)
     }
+
+    var rubyAnnotationColor: Color? {
+        if let color = attributes["ruby-annotation-color"]?.toColor() {
+            return color
+        }
+        return nil
+    }
+
+    var hasExplicitRubyAnnotationFont: Bool {
+        attributes["ruby-annotation-font-name"] != nil
+    }
+
+    func rubyFontWeight() -> PlatformFont.Weight {
+        guard let raw = attributes["ruby-font-weight"]?.string,
+              let value = Double(raw) else {
+            return .regular
+        }
+#if os(macOS)
+        return PlatformFont.Weight(value)
+#else
+        return PlatformFont.Weight(rawValue: CGFloat(value))
+#endif
+    }
+
+    func rubyFontItalic() -> Bool {
+        attributes["ruby-font-italic"]?.string == "1"
+    }
 }
 
 private struct RubyInlineLabel: View {
@@ -125,11 +180,14 @@ private struct RubyInlineLabel: View {
     let rubyPosition: CTRubyPosition
     let rubyScale: CGFloat
     let foregroundColor: Color?
+    let rubyAnnotationColor: Color?
+    let hasExplicitRubyAnnotationFont: Bool
 
     var body: some View {
 #if os(macOS)
         RubyTextRepresentable(
             attributedText: attributedText,
+            rubyText: rubyText,
             baseFont: font,
             rubyFont: rubyFont,
             rubyPosition: rubyPosition
@@ -138,6 +196,7 @@ private struct RubyInlineLabel: View {
 #else
         RubyTextRepresentable(
             attributedText: attributedText,
+            rubyText: rubyText,
             baseFont: font,
             rubyFont: rubyFont,
             rubyPosition: rubyPosition
@@ -154,12 +213,27 @@ private struct RubyInlineLabel: View {
             return NSAttributedString(string: base, attributes: baseAttributes)
         }
 
+        let baseFont = font
+        let sizeFactor: CGFloat
+        if let rubyFont, let baseFont, baseFont.pointSize > 0 {
+            sizeFactor = rubyFont.pointSize / baseFont.pointSize
+        } else {
+            sizeFactor = rubyScale
+        }
+
         var rubyAttributes: [CFString: Any] = [
-            kCTRubyAnnotationSizeFactorAttributeName: CGFloat(1.0),
+            kCTRubyAnnotationSizeFactorAttributeName: sizeFactor,
             kCTRubyAnnotationScaleToFitAttributeName: false,
         ]
-        if let rubyFont {
-            rubyAttributes[kCTFontAttributeName] = rubyFont
+        if let rubyAnnotationColor {
+#if os(macOS)
+            rubyAttributes[kCTForegroundColorAttributeName] = NSColor(rubyAnnotationColor).cgColor
+#else
+            rubyAttributes[kCTForegroundColorAttributeName] = UIColor(rubyAnnotationColor).cgColor
+#endif
+        }
+        if hasExplicitRubyAnnotationFont, let rubyFont {
+            rubyAttributes[kCTFontAttributeName] = rubyFont.manabiCTFont
         }
 
         let annotation = CTRubyAnnotationCreateWithAttributes(
@@ -180,6 +254,7 @@ private struct RubyInlineLabel: View {
         var attributes: [NSAttributedString.Key: Any] = [:]
         if let font {
             attributes[.font] = font
+            attributes[kCTFontAttributeName as NSAttributedString.Key] = font.manabiCTFont
         }
         if let foregroundColor {
 #if os(macOS)
@@ -220,11 +295,13 @@ private struct RubyInlineLabel: View {
         return String(format: "rgba(%.3f,%.3f,%.3f,%.3f)", r, g, b, a)
 #endif
     }
+
 }
 
 #if os(macOS)
 private struct RubyTextRepresentable: NSViewRepresentable {
     let attributedText: NSAttributedString
+    let rubyText: String
     let baseFont: PlatformFont?
     let rubyFont: PlatformFont?
     let rubyPosition: CTRubyPosition
@@ -236,6 +313,7 @@ private struct RubyTextRepresentable: NSViewRepresentable {
         view.setContentCompressionResistancePriority(.required, for: .horizontal)
         view.setContentCompressionResistancePriority(.required, for: .vertical)
         view.attributedText = attributedText
+        view.rubyText = rubyText
         view.baseFont = baseFont
         view.rubyFont = rubyFont
         view.rubyPosition = rubyPosition
@@ -244,6 +322,7 @@ private struct RubyTextRepresentable: NSViewRepresentable {
 
     func updateNSView(_ nsView: RubyTextView, context: Context) {
         nsView.attributedText = attributedText
+        nsView.rubyText = rubyText
         nsView.baseFont = baseFont
         nsView.rubyFont = rubyFont
         nsView.rubyPosition = rubyPosition
@@ -252,6 +331,7 @@ private struct RubyTextRepresentable: NSViewRepresentable {
 #else
 private struct RubyTextRepresentable: UIViewRepresentable {
     let attributedText: NSAttributedString
+    let rubyText: String
     let baseFont: PlatformFont?
     let rubyFont: PlatformFont?
     let rubyPosition: CTRubyPosition
@@ -263,6 +343,7 @@ private struct RubyTextRepresentable: UIViewRepresentable {
         view.setContentCompressionResistancePriority(.required, for: .horizontal)
         view.setContentCompressionResistancePriority(.required, for: .vertical)
         view.attributedText = attributedText
+        view.rubyText = rubyText
         view.baseFont = baseFont
         view.rubyFont = rubyFont
         view.rubyPosition = rubyPosition
@@ -271,6 +352,7 @@ private struct RubyTextRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: RubyTextView, context: Context) {
         uiView.attributedText = attributedText
+        uiView.rubyText = rubyText
         uiView.baseFont = baseFont
         uiView.rubyFont = rubyFont
         uiView.rubyPosition = rubyPosition
@@ -279,6 +361,18 @@ private struct RubyTextRepresentable: UIViewRepresentable {
 #endif
 
 private final class RubyTextView: PlatformView {
+    var rubyText: String = "" {
+        didSet {
+            guard oldValue != rubyText else { return }
+#if os(macOS)
+            needsDisplay = true
+            invalidateIntrinsicContentSize()
+#else
+            setNeedsDisplay()
+            invalidateIntrinsicContentSize()
+#endif
+        }
+    }
     var baseFont: PlatformFont?
     var rubyFont: PlatformFont?
     var rubyPosition: CTRubyPosition = .before
@@ -340,7 +434,11 @@ private final class RubyTextView: PlatformView {
         var descent: CGFloat = 0
         var leading: CGFloat = 0
         let idealWidth = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading)).rounded(.up)
-        let baseHeight = (ascent + descent + leading)
+        let baseMetrics = baseFontMetrics()
+        let baseAscent = baseMetrics.ascent ?? ascent
+        let baseDescent = baseMetrics.descent ?? descent
+        let baseLeading = baseMetrics.leading ?? leading
+        let baseHeight = (baseAscent + baseDescent + baseLeading)
         let rubyHeight = resolvedRubyHeight()
         let extraAbove: CGFloat
         let extraBelow: CGFloat
@@ -372,8 +470,14 @@ private final class RubyTextView: PlatformView {
     }
 
     private func resolvedRubyHeight() -> CGFloat {
-        if let rubyFont {
-            return rubyFont.manabiFontHeight
+        if let rubyFont, !rubyText.isEmpty {
+            let attributed = NSAttributedString(string: rubyText, attributes: [.font: rubyFont])
+            let line = CTLineCreateWithAttributedString(attributed as CFAttributedString)
+            var ascent: CGFloat = 0
+            var descent: CGFloat = 0
+            var leading: CGFloat = 0
+            _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+            return max(0, ascent + descent + leading)
         }
         if let baseFont {
             return baseFont.manabiFontHeight * 0.5
@@ -386,6 +490,15 @@ private final class RubyTextView: PlatformView {
         switch rubyPosition {
         case .after: return rubyHeight
         case .before: return 0
+        default: return rubyHeight / 2
+        }
+    }
+
+    private func rubyExtraAbove() -> CGFloat {
+        let rubyHeight = resolvedRubyHeight()
+        switch rubyPosition {
+        case .before: return rubyHeight
+        case .after: return 0
         default: return rubyHeight / 2
         }
     }
@@ -420,10 +533,19 @@ private final class RubyTextView: PlatformView {
         var leading: CGFloat = 0
         _ = CTLineGetTypographicBounds(truncated, &ascent, &descent, &leading)
         let baselineX = rect.minX - glyphBounds.origin.x
-        let baselineY = rect.minY + rubyExtraBelow() + descent
+        let baselineY = rect.minY + rubyExtraBelow()
         context.textPosition = CGPoint(x: baselineX, y: baselineY)
 
         CTLineDraw(truncated, context)
         context.restoreGState()
+    }
+
+    private func baseFontMetrics() -> (ascent: CGFloat?, descent: CGFloat?, leading: CGFloat?) {
+        guard let baseFont else { return (nil, nil, nil) }
+        let ctFont = baseFont.manabiCTFont
+        let ascent = CTFontGetAscent(ctFont)
+        let descent = CTFontGetDescent(ctFont)
+        let leading = CTFontGetLeading(ctFont)
+        return (ascent, descent, leading)
     }
 }

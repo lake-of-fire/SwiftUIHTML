@@ -11,43 +11,76 @@ struct HTMLInline: View {
     let texts: [TextType]
     let hasAttachment: Bool
     let textLine: TextLine
+    let applyTopPadding: Bool
+    let applyBottomPadding: Bool
     @StateObject var attachmentManager = AttachmentManager()
     @HTMLEnvironment(\.styleContainer) private var styleContainer
 
-    init(elements: [InlineElement]) {
-        self.init(texts: elements.toHTMLTextType())
+    init(
+        elements: [InlineElement],
+        applyTopPadding: Bool = true,
+        applyBottomPadding: Bool = true
+    ) {
+        self.init(
+            texts: elements.toHTMLTextType(),
+            applyTopPadding: applyTopPadding,
+            applyBottomPadding: applyBottomPadding
+        )
     }
 
-    init(texts: [TextType]) {
-        let trimmed = texts.trimmingNewLines().coalescingTextRuns()
+    init(
+        texts: [TextType],
+        applyTopPadding: Bool = true,
+        applyBottomPadding: Bool = true
+    ) {
+        if Self.shouldLogInline() {
+            Self.logLeadingWhitespace(texts: texts)
+        }
+        let trimmed = texts
+            .trimmingNewLines()
+            .trimmingLeadingWhitespace()
+            .coalescingTextRuns()
+        if trimmed.isEmpty, Self.shouldLogInline() {
+            AttachmentDebugLogger.record("[Inline] empty after trimming")
+        }
         self.texts = trimmed
         self.hasAttachment = trimmed.contains(where: \.hasAttachment)
         self.textLine = Self.resolveTextLine(texts: trimmed)
+        self.applyTopPadding = applyTopPadding
+        self.applyBottomPadding = applyBottomPadding
     }
 
     var body: some View {
-        content
-            .fixedSize(horizontal: false, vertical: true)
-            .overlay(alignment: .topLeading) { htmlTextLayout }
-            .modifier(TextLineModifier(textLine: textLine))
-            .onAppear {
-                let styleLineSpacing = styleContainer.textLine?.lineSpacing ?? 0
-                let styleVerticalPadding = styleContainer.textLine?.verticalPadding ?? 0
-                let effectiveLineSpacing = max(textLine.lineSpacing, styleLineSpacing)
-                let effectiveVerticalPadding = max(textLine.verticalPadding, styleVerticalPadding)
-                AttachmentDebugLogger.record(
-                    "[Inline] textLine spacing=\(textLine.lineSpacing) verticalPadding=\(textLine.verticalPadding) styleLineSpacing=\(styleLineSpacing) styleVerticalPadding=\(styleVerticalPadding) effectiveLineSpacing=\(effectiveLineSpacing) effectiveVerticalPadding=\(effectiveVerticalPadding)"
-                )
-            }
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .hidden()
-                        .modifier(OnChangeViewModifier(of: proxy.size, initial: true) { _, newValue in
-                            AttachmentDebugLogger.record("[Inline] contentSize=\(newValue)")
-                        })
+        if texts.isEmpty {
+            EmptyView()
+        } else {
+            content
+                .fixedSize(horizontal: false, vertical: true)
+                .overlay(alignment: .topLeading) { htmlTextLayout }
+                .modifier(TextLineModifier(
+                    textLine: textLine,
+                    applyTopPadding: applyTopPadding,
+                    applyBottomPadding: applyBottomPadding
+                ))
+                .onAppear {
+                    let styleLineSpacing = styleContainer.textLine?.lineSpacing ?? 0
+                    let styleVerticalPadding = styleContainer.textLine?.verticalPadding ?? 0
+                    let effectiveLineSpacing = max(textLine.lineSpacing, styleLineSpacing)
+                    let effectiveVerticalPadding = max(textLine.verticalPadding, styleVerticalPadding)
+                    AttachmentDebugLogger.record(
+                        "[Inline] textLine spacing=\(textLine.lineSpacing) verticalPadding=\(textLine.verticalPadding) styleLineSpacing=\(styleLineSpacing) styleVerticalPadding=\(styleVerticalPadding) effectiveLineSpacing=\(effectiveLineSpacing) effectiveVerticalPadding=\(effectiveVerticalPadding)"
+                    )
                 }
-            )
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .hidden()
+                            .modifier(OnChangeViewModifier(of: proxy.size, initial: true) { _, newValue in
+                                AttachmentDebugLogger.record("[Inline] contentSize=\(newValue)")
+                            })
+                    }
+                )
+        }
     }
 
     @ViewBuilder
@@ -87,6 +120,13 @@ struct HTMLInline: View {
 }
 
 private extension HTMLInline {
+    static func shouldLogInline() -> Bool {
+        ProcessInfo.processInfo.environment["SWIFTUIHTML_INLINE_LOGS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_INLINE_LOGS")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+    }
+
     static func resolveTextLine(texts: [TextType]) -> TextLine {
         var maxLineSpacing: CGFloat = 0
         var maxVerticalPadding: CGFloat = 0
@@ -120,6 +160,22 @@ private extension HTMLInline {
         return Image(uiImage: image.withRenderingMode(.alwaysOriginal))
 #endif
     }
+
+    static func logLeadingWhitespace(texts: [TextType]) {
+        guard let first = texts.first else { return }
+        switch first {
+        case .newLine:
+            AttachmentDebugLogger.record("[Inline] leading newLine")
+        case let .text(string, _):
+            let leading = ASCIIWhitespace.trimLeading(string)
+            let trimmedCount = string.count - leading.count
+            if trimmedCount > 0 {
+                AttachmentDebugLogger.record("[Inline] leadingWhitespace count=\(trimmedCount) sample=\(String(string.prefix(min(24, string.count))))")
+            }
+        case .attachment:
+            break
+        }
+    }
 }
 
 extension HTMLInline {
@@ -141,6 +197,31 @@ private extension Array where Element == TextType {
             return dropLast()
         }
         return self
+    }
+
+    func trimmingLeadingWhitespace() -> [Element] {
+        var result = self
+        var index = 0
+        while index < result.count {
+            switch result[index] {
+            case let .text(string, styleContainer):
+                let trimmed = ASCIIWhitespace.trimLeading(string)
+                if trimmed.isEmpty {
+                    result.remove(at: index)
+                    continue
+                }
+                if trimmed.count != string.count {
+                    result[index] = .text(String(trimmed), styleContainer: styleContainer)
+                }
+                return result
+            case .newLine:
+                result.remove(at: index)
+                continue
+            case .attachment:
+                return result
+            }
+        }
+        return result
     }
 
     func coalescingTextRuns() -> [Element] {

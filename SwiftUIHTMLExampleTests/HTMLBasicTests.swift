@@ -468,6 +468,9 @@ class HTMLBasicTests {
             .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
             .frame(width: 375)
             .fixedSize(horizontal: true, vertical: false)
+            .background(WordBrekFrameReporter(label: "HTMLView"))
+            .coordinateSpace(name: "WordBrekSpace")
+            .background(WordBrekFrameReporter(label: "Root"))
         try? await ViewSnapshotTester.snapshot(
             of: view,
             sleep: .seconds(2)
@@ -584,6 +587,58 @@ class HTMLBasicTests {
             sleep: .seconds(2)
         )
     }
+
+    @MainActor
+    @Test("Margin square snapshot")
+    func testMarginSquareSnapshot() async throws {
+        let font = UIFont.systemFont(ofSize: 12)
+        var style = HTMLStyleContainer()
+        style.uiFont = font
+        style.textLine = .lineSpacing(spacing: 0)
+        style.lineBreakMode = .byWordWrapping
+        let html = "<body style=\"margin: 20px;\"><img src=\"https://dummyimage.com/50x50/000/000.png\" width=\"50\" height=\"50\" /></body>"
+
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
+            .htmlEnvironment(\.configuration, .sample)
+            .htmlEnvironment(\.styleContainer, style)
+            .frame(width: 200, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+
+        try await ViewSnapshotTester.snapshot(
+            of: view,
+            named: "marginSquare",
+            html: html,
+            sleep: .seconds(2)
+        )
+    }
+}
+
+private struct WordBrekFrameReporter: View {
+    let label: String
+
+    var body: some View {
+        GeometryReader { proxy in
+            let snapshot = WordBrekFrameSnapshot(
+                size: proxy.size,
+                local: proxy.frame(in: .local),
+                named: proxy.frame(in: .named("WordBrekSpace")),
+                global: proxy.frame(in: .global)
+            )
+            Color.clear
+                .modifier(OnChangeViewModifier(of: snapshot, initial: true) { _, newValue in
+                    AttachmentDebugLogger.record(
+                        "[WordBrek] \(label) size=\(newValue.size) local=\(newValue.local) named=\(newValue.named) global=\(newValue.global)"
+                    )
+                })
+        }
+    }
+}
+
+private struct WordBrekFrameSnapshot: Equatable {
+    let size: CGSize
+    let local: CGRect
+    let named: CGRect
+    let global: CGRect
 }
 #endif
 
