@@ -122,21 +122,10 @@ final class TextAttachment: NSTextAttachment {
         let boundHeight = getAdjustedSize().height
 #endif
         let lineHeight = lineHeightOverride ?? textLine?.lineHeight ?? fontHeight
-#if os(macOS)
-        var verticalOffset = (lineHeight - fontHeight) / 2
-        let heightDelta = max(0, boundHeight - fontHeight)
-        verticalOffset += heightDelta * 1.4
-        if lineHeight < boundHeight {
-            verticalOffset -= (boundHeight - lineHeight) / 2
-        }
-        var adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
-#else
-        var verticalOffset = (boundHeight - fontHeight) / 2
-        if lineHeight < boundHeight {
-            verticalOffset -= (boundHeight - lineHeight) / 2
-        }
-        var adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
-#endif
+        let centerOffset = boundHeight / 2
+        let heightDelta = max(0, boundHeight - lineHeight)
+        let verticalOffset = centerOffset - heightDelta / 2
+        let adjusted = CGPoint(x: point.x, y: point.y - boundHeight + verticalOffset)
         if ProcessInfo.processInfo.environment["SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS"] == "1"
             || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS")
             || NSClassFromString("XCTestCase") != nil {

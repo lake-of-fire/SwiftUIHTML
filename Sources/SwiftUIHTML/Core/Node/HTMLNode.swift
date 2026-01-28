@@ -40,20 +40,22 @@ extension HTMLNode {
         configuration: HTMLConfiguration,
         with styleContainer: HTMLStyleContainer
     ) -> BlockElement {
+        var rootStyle = styleContainer
+        configuration.applyStyles(tag: tag, attributes: attributes, to: &rootStyle)
         var contents: [TagElement] = []
         contents.reserveCapacity(children.count)
         for child in children {
             child.appendElements(
                 into: &contents,
                 configuration: configuration,
-                with: styleContainer
+                with: rootStyle
             )
         }
         return BlockElement(
             tag: tag,
             attributes: attributes,
             contents: contents,
-            styleContainer: styleContainer
+            styleContainer: rootStyle
         )
     }
 
@@ -102,6 +104,14 @@ fileprivate extension HTMLNode {
             return
         }
         var _styleContainer = styleContainer
+        if (ProcessInfo.processInfo.environment["SWIFTUIHTML_FONT_LOGS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_FONT_LOGS")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil),
+           tag == "body",
+           let rawStyle = attributes["style"]?.string {
+            AttachmentDebugLogger.record("[Style] body style=\(rawStyle)")
+        }
         configuration.applyStyles(tag: tag, attributes: attributes, to: &_styleContainer)
 
         if tag == "ruby",

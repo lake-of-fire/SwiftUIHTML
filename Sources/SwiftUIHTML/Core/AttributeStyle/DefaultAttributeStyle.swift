@@ -26,11 +26,19 @@ public struct DefaultAttributeStyler: AttributeStyleable {
             styleContainer.backgroundColor = color
         }
 
+        if CSSFontUtility.shouldLogFontResolution(),
+           let fontFamilyValue = cssStyle["font-family"]?.string {
+            AttachmentDebugLogger.record("[Font] style font-family=\(fontFamilyValue) current=\(styleContainer.uiFont?.fontName ?? "nil")")
+        }
+
         if let newFont = CSSFontUtility.createFont(
             fromCSSStyle: cssStyle,
             currentFont: styleContainer.uiFont
         ) {
             styleContainer.uiFont = newFont
+            if case let .lineHeight(_, lineHeight)? = styleContainer.textLine {
+                styleContainer.textLine = .lineHeight(font: newFont, lineHeight: lineHeight)
+            }
         }
 
         if let rawLineHeight = cssStyle["line-height"]?.string,
@@ -42,6 +50,9 @@ public struct DefaultAttributeStyler: AttributeStyleable {
         }
 
         if let wordBreak = cssStyle["word-break"]?.string {
+            if CSSFontUtility.shouldLogFontResolution() {
+                AttachmentDebugLogger.record("[Text] word-break=\(wordBreak) currentLineBreak=\(styleContainer.lineBreakMode)")
+            }
             switch wordBreak {
             case "break-all":
                 styleContainer.lineBreakMode = .byCharWrapping

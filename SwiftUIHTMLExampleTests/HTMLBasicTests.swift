@@ -58,6 +58,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "\(lineBreakMode)",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -87,6 +88,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "\(lineBreakMode)",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -150,6 +152,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "\(Int(width)),\(lineBreakMode)",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -180,6 +183,7 @@ class HTMLBasicTests {
 
         try? await ViewSnapshotTester.snapshot(
             of: view,
+            html: html,
             sleep: .seconds(3)
         )
     }
@@ -234,6 +238,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "\(lineBreakMode)",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -267,6 +272,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "imagePositionAndLineHeight",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -297,6 +303,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "nonEnglishTextWithImages",
+            html: html,
             sleep: .seconds(3)
         )
     }
@@ -324,6 +331,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "longWordsWithImages_\(lineBreakMode)",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -364,6 +372,7 @@ class HTMLBasicTests {
         try? await ViewSnapshotTester.snapshot(
             of: view,
             named: "complexImageLayout",
+            html: html,
             sleep: .seconds(3)
         )
     }
@@ -473,6 +482,7 @@ class HTMLBasicTests {
             .background(WordBrekFrameReporter(label: "Root"))
         try? await ViewSnapshotTester.snapshot(
             of: view,
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -510,6 +520,7 @@ class HTMLBasicTests {
         try await ViewSnapshotTester.snapshot(
             of: view,
             named: "yomitanEntry",
+            html: html,
             sleep: .seconds(2)
         )
     }
@@ -596,7 +607,7 @@ class HTMLBasicTests {
         style.uiFont = font
         style.textLine = .lineSpacing(spacing: 0)
         style.lineBreakMode = .byWordWrapping
-        let html = "<body style=\"margin: 20px;\"><img src=\"https://dummyimage.com/50x50/000/000.png\" width=\"50\" height=\"50\" /></body>"
+        let html = "<body style=\"margin: 20px;\"><div style=\"width: 20px; height: 20px; background-color: black\"></div></body>"
 
         let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
             .htmlEnvironment(\.configuration, .sample)
@@ -607,6 +618,31 @@ class HTMLBasicTests {
         try await ViewSnapshotTester.snapshot(
             of: view,
             named: "marginSquare",
+            html: html,
+            sleep: .seconds(2)
+        )
+    }
+
+    @MainActor
+    @Test("Double margin square stack")
+    func testDoubleMarginSquares() async throws {
+        let html = """
+        <body style="margin: 20px;">
+            <div style="width: 200px; height: 200px; margin: 20px 0; background-color: black"></div>
+            <div style="width: 200px; height: 200px; margin: 20px 0; background-color: black"></div>
+        </body>
+        """
+
+        let configuration = HTMLConfiguration.sample.collapsingBlockMargins(true)
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
+            .htmlEnvironment(\.configuration, configuration)
+            .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
+            .frame(width: 240, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+
+        try await ViewSnapshotTester.snapshot(
+            of: view,
+            named: "doubleMarginSquares",
             html: html,
             sleep: .seconds(2)
         )
@@ -626,6 +662,33 @@ class HTMLBasicTests {
         try await ViewSnapshotTester.snapshot(
             of: view,
             named: "listItemSquare",
+            html: html,
+            sleep: .seconds(2)
+        )
+    }
+
+    @MainActor
+    @Test("Bullet image alignment")
+    func testBulletImageAlignment() async throws {
+        let html = """
+        <main>
+            <section>
+                <ul>
+                    <li>O&nbsp;<a href=\"#\" style=\"text-decoration:none\">O</a></li>
+                </ul>
+            </section>
+        </main>
+        """
+
+        let view = HTMLView(html: html, parser: HTMLSwiftSoupParser())
+            .htmlEnvironment(\.configuration, .sample)
+            .htmlEnvironment(\.styleContainer, .sample(by: .byWordWrapping))
+            .frame(width: 320, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+
+        try await ViewSnapshotTester.snapshot(
+            of: view,
+            named: "bulletImageAlignment",
             html: html,
             sleep: .seconds(2)
         )
@@ -651,6 +714,67 @@ private struct WordBrekFrameReporter: View {
                 })
         }
     }
+}
+
+private struct WordBrekAttributeStyler: AttributeStyleable {
+    private let fallback = DefaultAttributeStyler()
+
+    func layoutStyle(attributes: [String : AttributeValue]) -> some ViewModifier {
+        fallback.layoutStyle(attributes: attributes)
+    }
+
+    func applyStyles(attributes: [String : AttributeValue], to styleContainer: inout HTMLStyleContainer) {
+        guard let cssStyle = attributes["style"]?.cssStyle else { return }
+
+        if let color = cssStyle["color"]?.toColor() {
+            styleContainer.foregroundColor = color
+        }
+
+        if let color = cssStyle["background-color"]?.toColor() {
+            styleContainer.backgroundColor = color
+        }
+
+        if let rawLineHeight = cssStyle["line-height"]?.string,
+           let font = styleContainer.uiFont,
+           let lineHeight = resolveLineHeightWordBrek(rawLineHeight, font: font) {
+            styleContainer.textLine = .lineHeight(font: font, lineHeight: lineHeight)
+        } else if let lineSpacing = cssStyle["line-spacing"]?.cgFloat {
+            styleContainer.textLine = .lineSpacing(spacing: lineSpacing)
+        }
+
+        if cssStyle["font-family"]?.string != nil,
+           let current = styleContainer.uiFont,
+           let arial = PlatformFont(name: "ArialMT", size: current.pointSize) {
+            styleContainer.uiFont = arial
+        }
+
+        // Intentionally ignore word-break for WordBrek baseline alignment.
+    }
+}
+
+private func resolveLineHeightWordBrek(_ rawValue: String, font: PlatformFont) -> CGFloat? {
+    let trimmed = ASCIIWhitespace.trim(rawValue)
+    guard !trimmed.isEmpty else { return nil }
+    let value = String(trimmed)
+    let lowered = value.lowercased()
+
+    if lowered == "normal" || lowered == "inherit" || lowered == "initial" || lowered == "unset" {
+        return font.manabiLineHeight
+    }
+
+    if lowered.hasSuffix("px")
+        || lowered.hasSuffix("pt")
+        || lowered.hasSuffix("em")
+        || lowered.hasSuffix("rem")
+        || lowered.hasSuffix("%") {
+        return CSSFontUtility.parseSize(fromFontSize: value, baseSize: font.pointSize)
+    }
+
+    if let multiplier = Double(lowered) {
+        return font.pointSize * CGFloat(multiplier)
+    }
+
+    return nil
 }
 
 private struct WordBrekFrameSnapshot: Equatable {

@@ -9,6 +9,7 @@ public struct HTMLConfiguration: @unchecked Sendable {
         case attachment
     }
 
+    public var collapseBlockMargins: Bool = false
     var dictionary: [String: HTMLTagElementable.Type] = [:]
     var dictionaryType: [String: TagType] = [:]
     var attributeStyle: any AttributeStyleable = EmptyAttributeStyle()
@@ -52,6 +53,12 @@ extension HTMLConfiguration {
     public func attributeStyler(_ style: any AttributeStyleable) -> Self {
         var copy = self
         copy.attributeStyle = style
+        return copy
+    }
+
+    public func collapsingBlockMargins(_ enabled: Bool) -> Self {
+        var copy = self
+        copy.collapseBlockMargins = enabled
         return copy
     }
 }

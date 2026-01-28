@@ -6,14 +6,20 @@ struct InnerLayoutModifier: ViewModifier {
     let cssStyle: CSSStyle
 
     func body(content: Content) -> some View {
+        let width = cssStyle["width"]?.cgFloat
+        let height = cssStyle["height"]?.cgFloat
+        let minWidth = cssStyle["min-width"]?.cgFloat ?? width
+        let maxWidth = cssStyle["max-width"]?.cgFloat
+        let minHeight = cssStyle["min-height"]?.cgFloat ?? height
+        let maxHeight = cssStyle["max-height"]?.cgFloat
         content
             .frame(
-                minWidth: cssStyle["min-width"]?.cgFloat,
-                idealWidth: cssStyle["width"]?.cgFloat,
-                maxWidth: cssStyle["max-width"]?.cgFloat,
-                minHeight: cssStyle["min-height"]?.cgFloat,
-                idealHeight: cssStyle["height"]?.cgFloat,
-                maxHeight: cssStyle["max-height"]?.cgFloat,
+                minWidth: minWidth,
+                idealWidth: width,
+                maxWidth: maxWidth,
+                minHeight: minHeight,
+                idealHeight: height,
+                maxHeight: maxHeight,
                 alignment: getAlignment()
             )
     }

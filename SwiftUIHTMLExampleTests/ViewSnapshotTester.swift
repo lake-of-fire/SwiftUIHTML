@@ -11,6 +11,40 @@ import Vision
 
 /// Utility class for rendering SwiftUI views in UIKit environment and generating snapshots
 class ViewSnapshotTester {
+    private final class SizeObserver: ObservableObject {
+        @Published var size: CGSize = .zero
+    }
+
+    private struct SnapshotSizePreferenceKey: PreferenceKey {
+        static var defaultValue: CGSize = .zero
+        static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+            let next = nextValue()
+            if next.width > 1 && next.height > 1 {
+                value = next
+            }
+        }
+    }
+
+    private struct SnapshotProbeView<Content: View>: View {
+        @ObservedObject var observer: SizeObserver
+        let content: Content
+
+        var body: some View {
+            content
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(key: SnapshotSizePreferenceKey.self, value: proxy.size)
+                    }
+                )
+                .onPreferenceChange(SnapshotSizePreferenceKey.self) { newValue in
+                    if newValue.width > 1 && newValue.height > 1 {
+                        observer.size = newValue
+                    }
+                }
+        }
+    }
+
     private static var diagnosticLogDirectory: URL {
         artifactsRootURL().appendingPathComponent("diag", isDirectory: true)
     }
@@ -34,12 +68,14 @@ class ViewSnapshotTester {
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_INLINE_LOGS")
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_PARSER_LOGS")
         UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_BLOCK_LOGS")
+        UserDefaults.standard.set(true, forKey: "SWIFTUIHTML_FONT_LOGS")
         setenv("SWIFTUIHTML_ATTACHMENT_LOGS", "1", 1)
         setenv("SWIFTUIHTML_ATTACHMENT_DIAGNOSTICS", "1", 1)
         setenv("SWIFTUIHTML_MARGIN_LOGS", "1", 1)
         setenv("SWIFTUIHTML_INLINE_LOGS", "1", 1)
         setenv("SWIFTUIHTML_PARSER_LOGS", "1", 1)
         setenv("SWIFTUIHTML_BLOCK_LOGS", "1", 1)
+        setenv("SWIFTUIHTML_FONT_LOGS", "1", 1)
         let artifactsURL = ensureSnapshotArtifactsDirectory(filePath: filePath)
         AttachmentDebugLogger.record("[Snapshot] artifactsRoot=\(artifactsURL.path)")
         rawLog("[Raw] artifactsRoot=\(artifactsURL.path)")
@@ -55,9 +91,19 @@ class ViewSnapshotTester {
         writeProbeFile(testName: testName, name: name)
         writeLocationProbe(testName: testName, name: name)
         AttachmentDebugLogger.record("[TestHarness] snapshot start: \(testName)")
-        let rootView = view.background(Color.white).compositingGroup().ignoresSafeArea()
+        let sizeObserver = SizeObserver()
+        let rootView = SnapshotProbeView(
+            observer: sizeObserver,
+            content: view.background(Color.white).compositingGroup()
+        )
         let hostingController = UIHostingController(rootView: rootView)
         let hostingView = hostingController.view!
+        hostingView.insetsLayoutMarginsFromSafeArea = false
+        hostingView.preservesSuperviewLayoutMargins = false
+        hostingView.layoutMargins = .zero
+        if #available(iOS 11.0, *) {
+            hostingView.directionalLayoutMargins = .zero
+        }
 
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = hostingController
@@ -71,7 +117,14 @@ class ViewSnapshotTester {
             hostingView.invalidateIntrinsicContentSize()
         }
 
-        let resolvedSize = resolvedSize(for: hostingController, fallbackView: hostingView)
+        let observedSize = await MainActor.run { sizeObserver.size }
+        AttachmentDebugLogger.record("[Snapshot] observedSize=\(observedSize)")
+        rawLog("[Raw] observedSize=\(observedSize)")
+        let resolvedSize = resolvedSize(
+            for: hostingController,
+            fallbackView: hostingView,
+            observedSize: observedSize
+        )
         AttachmentDebugLogger.record("[Snapshot] resolvedSize=\(resolvedSize)")
         rawLog("[Raw] resolvedSize=\(resolvedSize)")
         hostingView.frame = CGRect(origin: .zero, size: resolvedSize)
@@ -111,7 +164,11 @@ class ViewSnapshotTester {
         )
         rawLog("[Raw] captured image size=\(image.size) cg=\(image.cgImage != nil)")
         logPixelMetrics(image: image, testName: testName, name: name)
+        logMarginSquareSpacing(image: image, testName: testName, name: name)
+        logDoubleMarginSquaresSpacing(image: image, testName: testName, name: name)
         logListItemSquareMetrics(image: image, testName: testName, name: name)
+        logBulletImageAlignment(image: image, testName: testName, name: name)
+        logWordBrekBoxMetrics(image: image, testName: testName, name: name, filePath: filePath)
         writeSnapshotArtifact(
             image: image,
             testName: testName,
@@ -300,15 +357,310 @@ class ViewSnapshotTester {
         }
     }
 
-    private static func logListItemSquareMetrics(image: UIImage, testName: String, name: String?) {
+    private static func logMarginSquareSpacing(image: UIImage, testName: String, name: String?) {
+        guard testName.contains("MarginSquareSnapshot") else { return }
+        guard let bounds = nonWhiteBounds(in: image) else { return }
+        let scale = image.scale
+        let topPoints = CGFloat(bounds.top) / scale
+        let leftPoints = CGFloat(bounds.left) / scale
+        let bottomPoints = CGFloat(bounds.bottom) / scale
+        let widthPoints = CGFloat(bounds.width) / scale
+        let expectedBox: CGFloat = 20
+        let tolerance: CGFloat = 1.5
         let label = sanitizePathComponent(testName)
         let ident = sanitizePathComponent(name ?? "1")
-        let shouldMeasure = testName.contains("testListItemSquareSnapshot") || ident == "listItemSquare"
-        guard shouldMeasure, let cgImage = image.cgImage else { return }
+        let summary = String(
+            format: "%.1fpt top, %.1fpt left, %.1fpt bottom, %.1fpt box",
+            topPoints,
+            leftPoints,
+            bottomPoints,
+            widthPoints
+        )
+        let logLine = "[MarginSquare] \(label).\(ident) \(summary)"
+        print(logLine)
+        AttachmentDebugLogger.record(logLine)
+
+        XCTAssertLessThanOrEqual(abs(topPoints - leftPoints), tolerance, "Margin square top/left mismatch \(summary)")
+        XCTAssertLessThanOrEqual(abs(bottomPoints - leftPoints), tolerance, "Margin square bottom/left mismatch \(summary)")
+        XCTAssertLessThanOrEqual(abs(widthPoints - expectedBox), tolerance, "Margin square box size changed \(summary)")
+        XCTAssertLessThanOrEqual(abs(leftPoints - expectedBox), tolerance, "Margin square left margin drift \(summary)")
+    }
+
+    private static func logDoubleMarginSquaresSpacing(image: UIImage, testName: String, name: String?) {
+        guard testName.contains("DoubleMarginSquares") else { return }
+        guard let cgImage = image.cgImage else { return }
         let width = cgImage.width
         let height = cgImage.height
-        guard width > 1 && height > 1 else { return }
+        guard width > 1, height > 1 else { return }
 
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        var buffer = [UInt8](repeating: 0, count: bytesPerRow * height)
+        guard let context = CGContext(
+            data: &buffer,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let threshold: UInt8 = 250
+        var inkRows: [Bool] = Array(repeating: false, count: height)
+        for y in 0..<height {
+            let rowOffset = y * bytesPerRow
+            for x in 0..<width {
+                let offset = rowOffset + x * bytesPerPixel
+                let r = buffer[offset]
+                let g = buffer[offset + 1]
+                let b = buffer[offset + 2]
+                if r < threshold || g < threshold || b < threshold {
+                    inkRows[y] = true
+                    break
+                }
+            }
+        }
+
+        var ranges: [(start: Int, end: Int)] = []
+        var currentStart: Int?
+        for y in 0..<height {
+            if inkRows[y] {
+                if currentStart == nil {
+                    currentStart = y
+                }
+            } else if let start = currentStart {
+                ranges.append((start, y - 1))
+                currentStart = nil
+            }
+        }
+        if let start = currentStart {
+            ranges.append((start, height - 1))
+        }
+        guard ranges.count >= 2 else { return }
+        let first = ranges[0]
+        let second = ranges[1]
+
+        func boundsX(for range: (start: Int, end: Int)) -> (minX: Int, maxX: Int)? {
+            var minX = width
+            var maxX = -1
+            for y in range.start...range.end {
+                let rowOffset = y * bytesPerRow
+                for x in 0..<width {
+                    let offset = rowOffset + x * bytesPerPixel
+                    let r = buffer[offset]
+                    let g = buffer[offset + 1]
+                    let b = buffer[offset + 2]
+                    if r < threshold || g < threshold || b < threshold {
+                        if x < minX { minX = x }
+                        if x > maxX { maxX = x }
+                    }
+                }
+            }
+            guard maxX >= minX else { return nil }
+            return (minX, maxX)
+        }
+
+        guard let xBounds = boundsX(for: first) else { return }
+        let scale = image.scale
+        let squareHeight = CGFloat(first.end - first.start + 1) / scale
+        let squareWidth = CGFloat(xBounds.maxX - xBounds.minX + 1) / scale
+        let topMargin = CGFloat(first.start) / scale
+        let between = CGFloat(second.start - first.end - 1) / scale
+        let bottomMargin = CGFloat((height - 1) - second.end) / scale
+        let leftMargin = CGFloat(xBounds.minX) / scale
+
+        let expectedTopBottom = squareHeight * 0.2
+        let expectedLeft = squareWidth * 0.1
+        let expectedBetween = squareHeight * 0.1
+        let tolerance: CGFloat = 2
+
+        let label = sanitizePathComponent(testName)
+        let ident = sanitizePathComponent(name ?? "1")
+        let summary = String(
+            format: "%.1fpt top, %.1fpt left, %.1fpt between, %.1fpt bottom, square=%.1fx%.1f",
+            topMargin,
+            leftMargin,
+            between,
+            bottomMargin,
+            squareWidth,
+            squareHeight
+        )
+        let logLine = "[DoubleMarginSquares] \(label).\(ident) \(summary)"
+        print(logLine)
+        AttachmentDebugLogger.record(logLine)
+
+        XCTAssertLessThanOrEqual(abs(topMargin - expectedTopBottom), tolerance, "Top margin drift \(summary)")
+        XCTAssertLessThanOrEqual(abs(bottomMargin - expectedTopBottom), tolerance, "Bottom margin drift \(summary)")
+        XCTAssertLessThanOrEqual(abs(leftMargin - expectedLeft), tolerance, "Left margin drift \(summary)")
+        XCTAssertLessThanOrEqual(abs(between - expectedBetween), tolerance, "Between margin drift \(summary)")
+    }
+
+    private static func logWordBrekBoxMetrics(
+        image: UIImage,
+        testName: String,
+        name: String?,
+        filePath: StaticString
+    ) {
+        guard sanitizePathComponent(testName).contains("testingWordBrek") else { return }
+        let identifier = sanitizePathComponent(name ?? "1")
+        guard let baselineImage = loadBaselineImage(
+            filePath: filePath,
+            testName: sanitizePathComponent(testName),
+            identifier: identifier
+        ) else {
+            AttachmentDebugLogger.record("[WordBrekBoxes] baseline missing for \(testName).\(identifier)")
+            return
+        }
+
+        let (newBoxes, newSize) = wordBrekBoxes(in: image)
+        let (baselineBoxes, baseSize) = wordBrekBoxes(in: baselineImage)
+        AttachmentDebugLogger.record("[WordBrekBoxes] new=\(newBoxes.count) baseline=\(baselineBoxes.count)")
+        XCTAssertEqual(newBoxes.count, baselineBoxes.count, "WordBrek box count mismatch new=\(newBoxes.count) baseline=\(baselineBoxes.count)")
+        guard !newBoxes.isEmpty, !baselineBoxes.isEmpty else { return }
+
+        let pairedCount = min(newBoxes.count, baselineBoxes.count)
+        let tolerance: CGFloat = 0.02
+        for index in 0..<pairedCount {
+            let newRect = newBoxes[index]
+            let baseRect = baselineBoxes[index]
+            let newNorm = CGRect(
+                x: newRect.minX / max(newSize.width, 1),
+                y: newRect.minY / max(newSize.height, 1),
+                width: newRect.width / max(newSize.width, 1),
+                height: newRect.height / max(newSize.height, 1)
+            )
+            let baseNorm = CGRect(
+                x: baseRect.minX / max(baseSize.width, 1),
+                y: baseRect.minY / max(baseSize.height, 1),
+                width: baseRect.width / max(baseSize.width, 1),
+                height: baseRect.height / max(baseSize.height, 1)
+            )
+            let dx = newNorm.minX - baseNorm.minX
+            let dy = newNorm.minY - baseNorm.minY
+            let dw = newNorm.width - baseNorm.width
+            let dh = newNorm.height - baseNorm.height
+            let summary = String(
+                format: "box[%d] new=(%.4f,%.4f %.4fx%.4f) base=(%.4f,%.4f %.4fx%.4f) delta=(%.4f,%.4f %.4fx%.4f)",
+                index,
+                newNorm.minX,
+                newNorm.minY,
+                newNorm.width,
+                newNorm.height,
+                baseNorm.minX,
+                baseNorm.minY,
+                baseNorm.width,
+                baseNorm.height,
+                dx,
+                dy,
+                dw,
+                dh
+            )
+            AttachmentDebugLogger.record("[WordBrekBoxes] \(summary)")
+            XCTAssertLessThanOrEqual(abs(dx), tolerance, "WordBrek box x drift \(summary)")
+            XCTAssertLessThanOrEqual(abs(dy), tolerance, "WordBrek box y drift \(summary)")
+            XCTAssertLessThanOrEqual(abs(dw), tolerance, "WordBrek box width drift \(summary)")
+            XCTAssertLessThanOrEqual(abs(dh), tolerance, "WordBrek box height drift \(summary)")
+        }
+    }
+
+    private static func wordBrekBoxes(in image: UIImage) -> ([CGRect], CGSize) {
+        guard let cgImage = image.cgImage else { return ([], image.size) }
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 1, height > 1 else { return ([], image.size) }
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        var buffer = [UInt8](repeating: 0, count: bytesPerRow * height)
+        guard let context = CGContext(
+            data: &buffer,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return ([], CGSize(width: width, height: height)) }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let target: UInt8 = 248
+        let tolerance: Int = 4
+        func isBoxBackground(_ r: UInt8, _ g: UInt8, _ b: UInt8) -> Bool {
+            abs(Int(r) - Int(target)) <= tolerance
+                && abs(Int(g) - Int(target)) <= tolerance
+                && abs(Int(b) - Int(target)) <= tolerance
+        }
+
+        var visited = [Bool](repeating: false, count: width * height)
+        var rects: [CGRect] = []
+        rects.reserveCapacity(16)
+        func index(_ x: Int, _ y: Int) -> Int { y * width + x }
+        let minArea = 5000
+        for y in 0..<height {
+            for x in 0..<width {
+                let idx = index(x, y)
+                if visited[idx] { continue }
+                let offset = idx * bytesPerPixel
+                let r = buffer[offset]
+                let g = buffer[offset + 1]
+                let b = buffer[offset + 2]
+                if !isBoxBackground(r, g, b) {
+                    visited[idx] = true
+                    continue
+                }
+                var stack = [(x, y)]
+                visited[idx] = true
+                var minX = x
+                var maxX = x
+                var minY = y
+                var maxY = y
+                var count = 0
+                while let (cx, cy) = stack.popLast() {
+                    count += 1
+                    if cx < minX { minX = cx }
+                    if cx > maxX { maxX = cx }
+                    if cy < minY { minY = cy }
+                    if cy > maxY { maxY = cy }
+                    let neighbors = [
+                        (cx - 1, cy),
+                        (cx + 1, cy),
+                        (cx, cy - 1),
+                        (cx, cy + 1)
+                    ]
+                    for (nx, ny) in neighbors {
+                        guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                        let nidx = index(nx, ny)
+                        if visited[nidx] { continue }
+                        let noffset = nidx * bytesPerPixel
+                        let nr = buffer[noffset]
+                        let ng = buffer[noffset + 1]
+                        let nb = buffer[noffset + 2]
+                        if isBoxBackground(nr, ng, nb) {
+                            visited[nidx] = true
+                            stack.append((nx, ny))
+                        } else {
+                            visited[nidx] = true
+                        }
+                    }
+                }
+                if count < minArea { continue }
+                let rect = CGRect(
+                    x: CGFloat(minX),
+                    y: CGFloat(minY),
+                    width: CGFloat(maxX - minX + 1),
+                    height: CGFloat(maxY - minY + 1)
+                )
+                rects.append(rect)
+            }
+        }
+        return (rects.sorted { $0.minY < $1.minY }, CGSize(width: width, height: height))
+    }
+
+    private static func nonWhiteBounds(in image: UIImage) -> (top: Int, left: Int, bottom: Int, right: Int, width: Int, height: Int)? {
+        guard let cgImage = image.cgImage else { return nil }
+        let width = cgImage.width
+        let height = cgImage.height
         let bytesPerPixel = 4
         let bytesPerRow = bytesPerPixel * width
         let totalBytes = bytesPerRow * height
@@ -321,32 +673,120 @@ class ViewSnapshotTester {
             bytesPerRow: bytesPerRow,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return }
+        ) else {
+            return nil
+        }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
         var minX = width
         var minY = height
         var maxX = -1
         var maxY = -1
-        let darkThreshold: UInt8 = 40
+        let threshold: UInt8 = 250
+        for y in 0..<height {
+            let rowOffset = y * bytesPerRow
+            for x in 0..<width {
+                let offset = rowOffset + x * bytesPerPixel
+                let r = buffer[offset]
+                let g = buffer[offset + 1]
+                let b = buffer[offset + 2]
+                let a = buffer[offset + 3]
+                if a <= 10 { continue }
+                if r < threshold || g < threshold || b < threshold {
+                    if x < minX { minX = x }
+                    if x > maxX { maxX = x }
+                    if y < minY { minY = y }
+                    if y > maxY { maxY = y }
+                }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        let top = minY
+        let left = minX
+        let bottom = (height - 1) - maxY
+        let right = (width - 1) - maxX
+        return (top: top, left: left, bottom: bottom, right: right, width: maxX - minX + 1, height: maxY - minY + 1)
+    }
+
+    private struct DarkComponent {
+        let minX: Int
+        let minY: Int
+        let maxX: Int
+        let maxY: Int
+        let count: Int
+
+        var width: Int { maxX - minX + 1 }
+        var height: Int { maxY - minY + 1 }
+        var area: Int { count }
+        var rect: CGRect {
+            CGRect(
+                x: CGFloat(minX),
+                y: CGFloat(minY),
+                width: CGFloat(width),
+                height: CGFloat(height)
+            )
+        }
+
+        var center: CGPoint {
+            CGPoint(
+                x: CGFloat(minX + maxX) / 2,
+                y: CGFloat(minY + maxY) / 2
+            )
+        }
+    }
+
+    private struct ImageAnalysis {
+        let width: Int
+        let height: Int
+        let components: [DarkComponent]
+        let minX: Int?
+        let minY: Int?
+        let maxX: Int?
+        let maxY: Int?
+    }
+
+    private static func analyzeDarkImage(_ cgImage: CGImage) -> ImageAnalysis? {
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 1 && height > 1 else { return nil }
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let totalBytes = bytesPerRow * height
+        var buffer = [UInt8](repeating: 0, count: totalBytes)
+        guard let context = CGContext(
+            data: &buffer,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let whiteThreshold: UInt8 = 245
         let alphaThreshold: UInt8 = 10
         var visited = [Bool](repeating: false, count: width * height)
-        var components: [(minX: Int, minY: Int, maxX: Int, maxY: Int, count: Int)] = []
+        var components: [DarkComponent] = []
+        var overallMinX = width
+        var overallMinY = height
+        var overallMaxX = -1
+        var overallMaxY = -1
 
-        func isDark(_ x: Int, _ y: Int) -> Bool {
+        func isInk(x: Int, y: Int) -> Bool {
             let idx = y * bytesPerRow + x * bytesPerPixel
             let r = buffer[idx]
             let g = buffer[idx + 1]
             let b = buffer[idx + 2]
             let a = buffer[idx + 3]
             guard a > alphaThreshold else { return false }
-            return r < darkThreshold && g < darkThreshold && b < darkThreshold
+            return r < whiteThreshold || g < whiteThreshold || b < whiteThreshold
         }
 
         for y in 0..<height {
             for x in 0..<width {
                 let flat = y * width + x
-                if visited[flat] || !isDark(x, y) { continue }
+                if visited[flat] || !isInk(x: x, y: y) { continue }
                 var stack = [(x, y)]
                 visited[flat] = true
                 var cminX = x
@@ -356,10 +796,10 @@ class ViewSnapshotTester {
                 var count = 0
                 while let (cx, cy) = stack.popLast() {
                     count += 1
-                    if cx < cminX { cminX = cx }
-                    if cx > cmaxX { cmaxX = cx }
-                    if cy < cminY { cminY = cy }
-                    if cy > cmaxY { cmaxY = cy }
+                    cminX = min(cminX, cx)
+                    cmaxX = max(cmaxX, cx)
+                    cminY = min(cminY, cy)
+                    cmaxY = max(cmaxY, cy)
                     let neighbors = [
                         (cx - 1, cy), (cx + 1, cy),
                         (cx, cy - 1), (cx, cy + 1)
@@ -367,52 +807,195 @@ class ViewSnapshotTester {
                     for (nx, ny) in neighbors where nx >= 0 && ny >= 0 && nx < width && ny < height {
                         let nflat = ny * width + nx
                         if visited[nflat] { continue }
-                        if isDark(nx, ny) {
+                        if isInk(x: nx, y: ny) {
                             visited[nflat] = true
                             stack.append((nx, ny))
                         }
                     }
                 }
-                components.append((cminX, cminY, cmaxX, cmaxY, count))
+                components.append(DarkComponent(
+                    minX: cminX,
+                    minY: cminY,
+                    maxX: cmaxX,
+                    maxY: cmaxY,
+                    count: count
+                ))
+                overallMinX = min(overallMinX, cminX)
+                overallMinY = min(overallMinY, cminY)
+                overallMaxX = max(overallMaxX, cmaxX)
+                overallMaxY = max(overallMaxY, cmaxY)
             }
         }
 
-        for comp in components {
-            if comp.minX < minX { minX = comp.minX }
-            if comp.minY < minY { minY = comp.minY }
-            if comp.maxX > maxX { maxX = comp.maxX }
-            if comp.maxY > maxY { maxY = comp.maxY }
-        }
+        let minX = overallMaxX >= 0 ? overallMinX : nil
+        let minY = overallMaxY >= 0 ? overallMinY : nil
+        let maxX = overallMaxX >= 0 ? overallMaxX : nil
+        let maxY = overallMaxY >= 0 ? overallMaxY : nil
 
-        let squareCandidate = components
-            .filter {
-                let w = $0.maxX - $0.minX + 1
-                let h = $0.maxY - $0.minY + 1
-                return w >= 8 && w <= 14 && h >= 8 && h <= 14
-            }
-            .max { $0.count < $1.count }
+        return ImageAnalysis(
+            width: width,
+            height: height,
+            components: components,
+            minX: minX,
+            minY: minY,
+            maxX: maxX,
+            maxY: maxY
+        )
+    }
 
-        guard maxX >= minX, maxY >= minY else {
+    private static func logListItemSquareMetrics(image: UIImage, testName: String, name: String?) {
+        let label = sanitizePathComponent(testName)
+        let ident = sanitizePathComponent(name ?? "1")
+        let shouldMeasure = testName.contains("testListItemSquareSnapshot") || ident == "listItemSquare"
+        guard shouldMeasure, let cgImage = image.cgImage else { return }
+        guard let analysis = analyzeDarkImage(cgImage) else { return }
+        guard let minX = analysis.minX,
+              let minY = analysis.minY,
+              let maxX = analysis.maxX,
+              let maxY = analysis.maxY else {
             let line = "[ListSquareMetrics] \(label).\(ident) no-dark-components"
             print(line)
             AttachmentDebugLogger.record(line)
             return
         }
 
+        let squareCandidate = analysis.components
+            .filter {
+                let w = $0.width
+                let h = $0.height
+                return w >= 8 && w <= 14 && h >= 8 && h <= 14
+            }
+            .max { $0.count < $1.count }
+
         if let square = squareCandidate {
             let overallCenterY = Double(minY + maxY) / 2.0
             let squareCenterY = Double(square.minY + square.maxY) / 2.0
             let delta = squareCenterY - overallCenterY
-            let squareW = square.maxX - square.minX + 1
-            let squareH = square.maxY - square.minY + 1
-            let line = "[ListSquareMetrics] \(label).\(ident) overall=(\(minX),\(minY),\(maxX),\(maxY)) square=(\(square.minX),\(square.minY),\(square.maxX),\(square.maxY)) squareSize=\(squareW)x\(squareH) deltaCenterY=\(String(format: "%.2f", delta))"
+            let squareW = square.width
+            let squareH = square.height
+            let bulletCandidates = analysis.components.filter {
+                $0.width <= 12 && $0.height <= 12 && CGFloat($0.maxX) < CGFloat(square.minX) - 1
+            }
+            var line = "[ListSquareMetrics] \(label).\(ident) overall=(\(minX),\(minY),\(maxX),\(maxY)) square=(\(square.minX),\(square.minY),\(square.maxX),\(square.maxY)) squareSize=\(squareW)x\(squareH) deltaCenterY=\(String(format: "%.2f", delta))"
+            if let bullet = bulletCandidates.max(by: { $0.area < $1.area }) {
+                let bulletCenterY = Double(bullet.rect.midY)
+                let deltaBullet = bulletCenterY - squareCenterY
+                let gapToSquare = Double(square.minX) - Double(bullet.rect.maxX)
+                let scaledDelta = deltaBullet / Double(image.scale)
+                let gapPoints = gapToSquare / Double(image.scale)
+                line += " bulletSquareDelta=\(String(format: "%.2f", deltaBullet)) gap=\(String(format: "%.2f", gapPoints))"
+                XCTAssertLessThanOrEqual(abs(scaledDelta), 4.0, "Bullet not aligned with square (\(scaledDelta))")
+                XCTAssertGreaterThan(gapPoints, 1.0, "Bullet overlaps square (\(gapPoints))")
+            } else {
+                line += " bulletMissing"
+                XCTFail("[ListSquareMetrics] \(label).\(ident) bullet missing")
+            }
             print(line)
             AttachmentDebugLogger.record(line)
         } else {
-            let line = "[ListSquareMetrics] \(label).\(ident) squareNotFound overall=(\(minX),\(minY),\(maxX),\(maxY)) components=\(components.count)"
+            let line = "[ListSquareMetrics] \(label).\(ident) squareNotFound overall=\(minX),\(minY),\(maxX),\(maxY)) components=\(analysis.components.count)"
             print(line)
             AttachmentDebugLogger.record(line)
+            XCTFail("[ListSquareMetrics] \(label).\(ident) square missing")
         }
+    }
+
+    private static func logBulletImageAlignment(image: UIImage, testName: String, name: String?) {
+        guard testName.contains("BulletImageAlignment") else { return }
+        guard let cgImage = image.cgImage else { return }
+        guard let analysis = analyzeDarkImage(cgImage) else {
+            let message = "[BulletAlignment] \(sanitizePathComponent(testName)) no dark components"
+            print(message)
+            AttachmentDebugLogger.record(message)
+            XCTFail(message)
+            return
+        }
+        let bulletCandidates = analysis.components.filter {
+            $0.width <= 14 && $0.height <= 14 && $0.minX < analysis.width / 2
+        }
+        guard let bullet = bulletCandidates.max(by: { $0.area < $1.area }) else {
+            let message = "[BulletAlignment] \(sanitizePathComponent(testName)) bullet not found"
+            print(message)
+            AttachmentDebugLogger.record(message)
+            XCTFail(message)
+            return
+        }
+        let bulletRect = bullet.rect
+        let canvasSize = CGSize(width: CGFloat(analysis.width), height: CGFloat(analysis.height))
+        let letterRects = detectCharacterRects(in: cgImage, canvasSize: canvasSize, characters: ["O"])
+        let visibleLetters = letterRects.filter { $0.minX > bulletRect.maxX }
+        guard visibleLetters.count >= 2 else {
+            let message = "[BulletAlignment] \(sanitizePathComponent(testName)) expected 2 letter O but found \(visibleLetters.count)"
+            print(message)
+            AttachmentDebugLogger.record(message)
+            XCTFail(message)
+            return
+        }
+        let sortedLetters = visibleLetters.sorted { $0.minX < $1.minX }
+        let firstO = sortedLetters[0]
+        let secondO = sortedLetters[1]
+
+        let bulletCenterY = bulletRect.midY
+        let firstCenterY = firstO.midY
+        let secondCenterY = secondO.midY
+        let firstGap = firstO.minX - bulletRect.maxX
+        let interLetterGap = secondO.minX - firstO.maxX
+        let delta1 = String(format: "%.2f", bulletCenterY - firstCenterY)
+        let delta2 = String(format: "%.2f", bulletCenterY - secondCenterY)
+        let gapToBulletStr = String(format: "%.2f", firstGap)
+        let interGapStr = String(format: "%.2f", interLetterGap)
+        let line = "[BulletAlignment] bullet=\(bulletRect) firstO=\(firstO) secondO=\(secondO) centerDelta1=\(delta1) centerDelta2=\(delta2) gapToBullet=\(gapToBulletStr) interLetterGap=\(interGapStr)"
+        print(line)
+        AttachmentDebugLogger.record(line)
+
+        let scale = image.scale
+        let pointCenterDelta1 = (bulletCenterY - firstCenterY) / scale
+        let pointCenterDelta2 = (bulletCenterY - secondCenterY) / scale
+        let pointGapToBullet = firstGap / scale
+        let pointInterLetterGap = interLetterGap / scale
+
+        XCTAssertLessThanOrEqual(abs(pointCenterDelta1), 4.0, "Bullet and first letter misaligned (\(pointCenterDelta1))")
+        XCTAssertLessThanOrEqual(abs(pointCenterDelta2), 4.0, "Bullet and linked letter misaligned (\(pointCenterDelta2))")
+        XCTAssertGreaterThan(pointGapToBullet, 0.5, "First letter overlaps bullet (\(pointGapToBullet))")
+        XCTAssertGreaterThan(pointInterLetterGap, 4.0, "Letters appear collapsed (\(pointInterLetterGap))")
+    }
+
+    private static func detectCharacterRects(in cgImage: CGImage, canvasSize: CGSize, characters: Set<String>) -> [CGRect] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.minimumTextHeight = 0.01
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            let message = "[BulletAlignment] text recognition failed \(error.localizedDescription)"
+            print(message)
+            AttachmentDebugLogger.record(message)
+            return []
+        }
+        guard let results = request.results as? [VNRecognizedTextObservation] else { return [] }
+        var rects: [CGRect] = []
+        for observation in results {
+            guard let candidate = observation.topCandidates(1).first else { continue }
+            let trimmed = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard lettersContains(characters, text: trimmed) else { continue }
+            let bounding = observation.boundingBox
+            rects.append(CGRect(
+                x: bounding.minX * canvasSize.width,
+                y: (1 - bounding.maxY) * canvasSize.height,
+                width: bounding.width * canvasSize.width,
+                height: bounding.height * canvasSize.height
+            ))
+        }
+        return rects
+    }
+
+    private static func lettersContains(_ characters: Set<String>, text: String) -> Bool {
+        let filtered = text.replacingOccurrences(of: " ", with: "")
+            .filter { !$0.isWhitespace }
+        guard let single = filtered.first, filtered.count == 1 else { return false }
+        return characters.contains(String(single))
     }
 
     private static func recordIssue(
@@ -498,9 +1081,13 @@ class ViewSnapshotTester {
 
     private static func resolvedSize<V: View>(
         for hostingController: UIHostingController<V>,
-        fallbackView: UIView
+        fallbackView: UIView,
+        observedSize: CGSize
     ) -> CGSize {
         var proposedWidth = UIScreen.main.bounds.width
+        if observedSize.width > 1 && observedSize.height > 1 {
+            proposedWidth = observedSize.width
+        }
         if #available(iOS 16.0, *) {
             let unconstrained = CGSize(
                 width: CGFloat.greatestFiniteMagnitude,
@@ -535,18 +1122,45 @@ class ViewSnapshotTester {
             AttachmentDebugLogger.record("[Snapshot] systemLayoutSizeFitting=\(layoutSize)")
         }
 
-        let candidates = [measured, layoutSize].filter { $0.width > 1 && $0.height > 1 }
-        if let best = candidates.max(by: { $0.height < $1.height }) {
-            return best
+        var candidates: [CGSize] = []
+        if observedSize.width > 1 && observedSize.height > 1 {
+            candidates.append(observedSize)
+        }
+        let descendantSize = largestDescendantSize(in: fallbackView)
+        if descendantSize.width > 1 && descendantSize.height > 1 {
+            AttachmentDebugLogger.record("[Snapshot] descendantSize=\(descendantSize)")
+            candidates.append(descendantSize)
+        }
+        if measured.width > 1 && measured.height > 1 {
+            candidates.append(measured)
+        }
+        if layoutSize.width > 1 && layoutSize.height > 1 {
+            candidates.append(layoutSize)
         }
         let intrinsicSize = fallbackView.intrinsicContentSize
         if intrinsicSize.width > 1 && intrinsicSize.height > 1 {
             AttachmentDebugLogger.record("[Snapshot] intrinsicContentSize=\(intrinsicSize)")
-            return intrinsicSize
+            candidates.append(intrinsicSize)
+        }
+        if let best = candidates.max(by: { ($0.width * $0.height) < ($1.width * $1.height) }) {
+            AttachmentDebugLogger.record("[Snapshot] resolvedSize candidates=\(candidates) selected=\(best)")
+            return best
         }
         let screen = UIScreen.main.bounds.size
         AttachmentDebugLogger.record("[Snapshot] fallback screenSize=\(screen)")
         return screen
+    }
+
+    private static func largestDescendantSize(in rootView: UIView) -> CGSize {
+        var best = CGSize.zero
+        for view in allDescendants(of: rootView) {
+            let size = view.bounds.size
+            guard size.width > 1 && size.height > 1 else { continue }
+            if size.width >= best.width && size.height >= best.height {
+                best = size
+            }
+        }
+        return best
     }
 
 

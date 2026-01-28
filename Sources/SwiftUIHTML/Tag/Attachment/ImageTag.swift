@@ -36,6 +36,7 @@ struct ImageTag: InlineAttachmentTag {
         .onCompletion { _ in
             ImageLoadTracker.shared.end(url: url)
         }
+        .modifier(SizeModifier(size: size))
     }
 
     private func recordImageEvent(_ state: String, size: ElementSize) {

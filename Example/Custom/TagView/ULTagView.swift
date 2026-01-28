@@ -25,7 +25,7 @@ struct ULTagView: BlockTag {
 
     func liTag(liElement: BlockElement) -> some View {
         let isImageOnly = liIsImageOnly(liElement)
-        let alignment: VerticalAlignment = isImageOnly ? .center : .top
+        let alignment: VerticalAlignment = isImageOnly ? .center : .firstTextBaseline
         return HStack(alignment: alignment, spacing: .zero) {
             markerView(isImageOnly: isImageOnly)
             VStack(alignment: .leading, spacing: 4) {

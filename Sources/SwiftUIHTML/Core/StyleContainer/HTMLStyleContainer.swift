@@ -10,6 +10,7 @@ public struct HTMLStyleContainer: Equatable, Sendable, Hashable {
             hasher.combine(HashableAttributeContainer(container))
         }
         hasher.combine(textLine)
+        hasher.combine(lineBreakMode)
     }
 
     var container = AttributeContainer()

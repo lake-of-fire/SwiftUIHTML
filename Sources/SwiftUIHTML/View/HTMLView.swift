@@ -60,6 +60,53 @@ public struct HTMLView: View {
                 Color.clear
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            GeometryReader { proxy in
+                let size = proxy.size
+                Color.clear
+                    .hidden()
+                    .onAppear {
+                        if ProcessInfo.processInfo.environment["SWIFTUIHTML_LAYOUT_LOGS"] == "1"
+                            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_LAYOUT_LOGS")
+                            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil {
+                            AttachmentDebugLogger.record("[Layout][HTMLView] size=\(size)")
+                        }
+                    }
+                    .onChange(of: size) { newValue in
+                        if ProcessInfo.processInfo.environment["SWIFTUIHTML_LAYOUT_LOGS"] == "1"
+                            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_LAYOUT_LOGS")
+                            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil {
+                            AttachmentDebugLogger.record("[Layout][HTMLView] size=\(newValue)")
+                        }
+                    }
+            }
+        )
+        .background(
+            GeometryReader { proxy in
+                let frame = proxy.frame(in: .global)
+                Color.clear
+                    .hidden()
+                    .onAppear {
+                        if ProcessInfo.processInfo.environment["SWIFTUIHTML_LAYOUT_LOGS"] == "1"
+                            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_LAYOUT_LOGS")
+                            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil {
+                            AttachmentDebugLogger.record("[Layout][HTMLView] globalFrame=\(frame)")
+                        }
+                    }
+                    .onChange(of: frame) { newValue in
+                        if ProcessInfo.processInfo.environment["SWIFTUIHTML_LAYOUT_LOGS"] == "1"
+                            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_LAYOUT_LOGS")
+                            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+                            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil {
+                            AttachmentDebugLogger.record("[Layout][HTMLView] globalFrame=\(newValue)")
+                        }
+                    }
+            }
+        )
 #if DEBUG
         .overlay(alignment: .topLeading) {
             if shouldShowDebugOverlay {

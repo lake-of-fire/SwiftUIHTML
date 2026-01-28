@@ -85,8 +85,16 @@ final class HTMLBasicXCTest: XCTestCase {
         try await sut.testMarginSquareSnapshot()
     }
 
+    func testDoubleMarginSquares() async throws {
+        try await sut.testDoubleMarginSquares()
+    }
+
     func testListItemSquareSnapshot() async throws {
         try await sut.testListItemSquareSnapshot()
+    }
+
+    func testBulletImageAlignment() async throws {
+        try await sut.testBulletImageAlignment()
     }
 }
 #endif

@@ -40,3 +40,17 @@ extension LineBreakMode: Equatable, CustomStringConvertible {
         }
     }
 }
+
+extension LineBreakMode: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .byCharWrapping:
+            hasher.combine(0)
+        case .byWordWrapping:
+            hasher.combine(1)
+        case .custom(let id, _):
+            hasher.combine(2)
+            hasher.combine(id)
+        }
+    }
+}

@@ -23,6 +23,12 @@ public struct HTMLBlock: View {
             || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
             || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
     }
+    private var shouldLogLayout: Bool {
+        ProcessInfo.processInfo.environment["SWIFTUIHTML_LAYOUT_LOGS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_LAYOUT_LOGS")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+    }
 
     public init(element: BlockElement) {
         self.element = element
@@ -38,7 +44,9 @@ public struct HTMLBlock: View {
                 return (top: CGFloat.zero, bottom: CGFloat.zero)
             }
         }
-        let canCollapseParentEdges = !Self.hasPaddingOrBorder(attributes: element.attributes)
+        let collapseEnabled = configuration.collapseBlockMargins
+        let isBodyRoot = element.tag.lowercased() == "body"
+        let canCollapseParentEdges = collapseEnabled && !isBodyRoot && !Self.hasPaddingOrBorder(attributes: element.attributes)
         if shouldLogMargins {
             for (index, group) in groups.enumerated() {
                 guard case let .block(child) = group else { continue }
@@ -47,10 +55,10 @@ public struct HTMLBlock: View {
                 let isFirstBlock = Self.isFirstContentBlock(at: index, in: groups)
                 let isLastBlock = Self.isLastContentBlock(at: index, in: groups)
                 let prevBottom = prevIndex.map { margins[$0].bottom } ?? 0
-                let collapseTop = isFirstBlock && canCollapseParentEdges
-                    ? margins[index].top
-                    : (prevIndex != nil ? Self.collapseAmount(prevBottom: prevBottom, currentTop: margins[index].top) : 0)
-                let dropBottom = isLastBlock && canCollapseParentEdges ? margins[index].bottom : 0
+                let collapseTop = canCollapseParentEdges
+                    ? (isFirstBlock ? margins[index].top : (prevIndex != nil ? Self.collapseAmount(prevBottom: prevBottom, currentTop: margins[index].top) : 0))
+                    : 0
+                let dropBottom = canCollapseParentEdges && isLastBlock ? margins[index].bottom : 0
                 AttachmentDebugLogger.record(
                     "[Margin] tag=\(child.tag) index=\(index) top=\(margins[index].top) bottom=\(margins[index].bottom) collapseTop=\(collapseTop) dropBottom=\(dropBottom) prevBottom=\(prevBottom) collapseEdges=\(canCollapseParentEdges)"
                 )
@@ -64,13 +72,14 @@ public struct HTMLBlock: View {
                 let isFirstBlock = Self.isFirstContentBlock(at: index, in: groups)
                 let isLastBlock = Self.isLastContentBlock(at: index, in: groups)
                 let prevBottom = prevIndex.map { margins[$0].bottom } ?? 0
-                let collapseTop = isFirstBlock && canCollapseParentEdges
-                    ? margins[index].top
-                    : (prevIndex != nil ? Self.collapseAmount(prevBottom: prevBottom, currentTop: margins[index].top) : 0)
-                let dropBottom = isLastBlock && canCollapseParentEdges ? margins[index].bottom : 0
+                let collapseTop = canCollapseParentEdges
+                    ? (isFirstBlock ? margins[index].top : (prevIndex != nil ? Self.collapseAmount(prevBottom: prevBottom, currentTop: margins[index].top) : 0))
+                    : 0
+                let dropBottom = canCollapseParentEdges && isLastBlock ? margins[index].bottom : 0
                 renderContent(
                     group,
                     applyTopPadding: true,
+                    applyBottomPadding: true,
                     collapseTop: collapseTop,
                     dropBottom: dropBottom,
                     logBlock: shouldLogBlocks,
@@ -78,6 +87,23 @@ public struct HTMLBlock: View {
                 )
             }
         }
+        .background(
+            GeometryReader { proxy in
+                let size = proxy.size
+                Color.clear
+                    .hidden()
+                    .onAppear {
+                        if shouldLogLayout {
+                            AttachmentDebugLogger.record("[Layout][BlockRoot] tag=\(element.tag) size=\(size)")
+                        }
+                    }
+                    .onChange(of: size) { newValue in
+                        if shouldLogLayout {
+                            AttachmentDebugLogger.record("[Layout][BlockRoot] tag=\(element.tag) size=\(newValue)")
+                        }
+                    }
+            }
+        )
     }
 }
 
@@ -87,6 +113,7 @@ private extension HTMLBlock {
     func renderContent(
         _ groupContent: GroupContent,
         applyTopPadding: Bool,
+        applyBottomPadding: Bool,
         collapseTop: CGFloat,
         dropBottom: CGFloat,
         logBlock: Bool,
@@ -107,12 +134,18 @@ private extension HTMLBlock {
             .background(
                 GeometryReader { proxy in
                     let frame = proxy.frame(in: .global)
+                    let size = proxy.size
                     Color.clear
                         .hidden()
                         .onAppear {
                             AttachmentDebugLogger.record(
                                 "[BlockFrame] tag=\(childElement.tag) index=\(blockIndex) global=\(frame)"
                             )
+                            if logBlock {
+                                AttachmentDebugLogger.record(
+                                    "[Layout][Block] tag=\(childElement.tag) index=\(blockIndex) size=\(size)"
+                                )
+                            }
                         }
                         .onChange(of: frame) { newValue in
                             AttachmentDebugLogger.record(
@@ -124,7 +157,8 @@ private extension HTMLBlock {
         case .inline(let elements):
             renderInline(
                 elements: elements,
-                applyTopPadding: applyTopPadding
+                applyTopPadding: true,
+                applyBottomPadding: true
             )
         }
     }
@@ -132,17 +166,55 @@ private extension HTMLBlock {
     @ViewBuilder
     func renderInline(
         elements: [InlineElement],
-        applyTopPadding: Bool
+        applyTopPadding: Bool,
+        applyBottomPadding: Bool
     ) -> some View {
         // attachment 만 독립적으로 있는경우는 Inline 말고 View로 render
-        if elements.count == 1, let element = elements.first, case .attachment = element.type {
-            configuration.createAttachment(for: element.tag, with: element.attributes)
-                .modifier(LinkModifier(link: element.styleContainer.link))
+        if let attachmentElement = Self.singleAttachment(in: elements) {
+            let size = ElementSize(attributes: attachmentElement.attributes)
+            let _ = shouldLogLayout ? AttachmentDebugLogger.record(
+                "[Layout][InlineSingleAttachment] tag=\(attachmentElement.tag) size=\(String(describing: size.width))x\(String(describing: size.height))"
+            ) : ()
+            if let attachment = configuration.createAttachment(
+                for: attachmentElement.tag,
+                with: attachmentElement.attributes
+            ) {
+                let attachmentView = attachment
+                    .modifier(LinkModifier(link: attachmentElement.styleContainer.link))
+                if let width = size.width, let height = size.height {
+                    attachmentView.frame(width: width, height: height, alignment: .topLeading)
+                } else if let width = size.width {
+                    attachmentView.aspectRatio(contentMode: .fit).frame(width: width)
+                } else if let height = size.height {
+                    attachmentView.aspectRatio(contentMode: .fit).frame(height: height)
+                } else {
+                    attachmentView
+                }
+            } else {
+                EmptyView()
+            }
         } else {
             HTMLInline(
                 elements: elements,
                 applyTopPadding: applyTopPadding,
-                applyBottomPadding: true
+                applyBottomPadding: applyBottomPadding
+            )
+            .background(
+                GeometryReader { proxy in
+                    let size = proxy.size
+                    Color.clear
+                        .hidden()
+                        .onAppear {
+                            if shouldLogLayout {
+                                AttachmentDebugLogger.record("[Layout][Inline] size=\(size)")
+                            }
+                        }
+                        .onChange(of: size) { newValue in
+                            if shouldLogLayout {
+                                AttachmentDebugLogger.record("[Layout][Inline] size=\(newValue)")
+                            }
+                        }
+                }
             )
         }
     }
@@ -200,10 +272,10 @@ private extension HTMLBlock {
 
     static func collapseAmount(prevBottom: CGFloat, currentTop: CGFloat) -> CGFloat {
         if prevBottom >= 0, currentTop >= 0 {
-            return min(prevBottom, currentTop)
+            return max(prevBottom, currentTop)
         }
         if prevBottom <= 0, currentTop <= 0 {
-            return max(prevBottom, currentTop)
+            return min(prevBottom, currentTop)
         }
         return 0
     }
@@ -258,6 +330,24 @@ private extension HTMLBlock {
         return true
     }
 
+    static func singleAttachment(in elements: [InlineElement]) -> InlineElement? {
+        var attachment: InlineElement?
+        for element in elements {
+            switch element.type {
+            case .attachment:
+                if attachment != nil {
+                    return nil
+                }
+                attachment = element
+            case let .text(string):
+                if !ASCIIWhitespace.trim(string).isEmpty {
+                    return nil
+                }
+            }
+        }
+        return attachment
+    }
+
     static func isTrimmableWhitespaceInlineGroup(_ elements: [InlineElement]) -> Bool {
         for element in elements {
             switch element.type {
@@ -268,6 +358,44 @@ private extension HTMLBlock {
                     return false
                 }
             }
+        }
+        return true
+    }
+
+    static func isFirstInlineGroup(at index: Int, in groups: [GroupContent]) -> Bool {
+        guard index >= 0, index < groups.count else { return false }
+        guard case let .inline(elements) = groups[index],
+              !isWhitespaceOnlyInlineGroup(elements) else { return false }
+        var cursor = index - 1
+        while cursor >= 0 {
+            switch groups[cursor] {
+            case .block:
+                return false
+            case .inline(let prevElements):
+                if !isWhitespaceOnlyInlineGroup(prevElements) {
+                    return false
+                }
+            }
+            cursor -= 1
+        }
+        return true
+    }
+
+    static func isLastInlineGroup(at index: Int, in groups: [GroupContent]) -> Bool {
+        guard index >= 0, index < groups.count else { return false }
+        guard case let .inline(elements) = groups[index],
+              !isWhitespaceOnlyInlineGroup(elements) else { return false }
+        var cursor = index + 1
+        while cursor < groups.count {
+            switch groups[cursor] {
+            case .block:
+                return false
+            case .inline(let nextElements):
+                if !isWhitespaceOnlyInlineGroup(nextElements) {
+                    return false
+                }
+            }
+            cursor += 1
         }
         return true
     }

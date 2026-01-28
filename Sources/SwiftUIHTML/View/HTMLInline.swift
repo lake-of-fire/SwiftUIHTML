@@ -70,6 +70,12 @@ struct HTMLInline: View {
                     AttachmentDebugLogger.record(
                         "[Inline] textLine spacing=\(textLine.lineSpacing) verticalPadding=\(textLine.verticalPadding) styleLineSpacing=\(styleLineSpacing) styleVerticalPadding=\(styleVerticalPadding) effectiveLineSpacing=\(effectiveLineSpacing) effectiveVerticalPadding=\(effectiveVerticalPadding)"
                     )
+                    if let font = styleContainer.uiFont {
+                        AttachmentDebugLogger.recordOnce(
+                            "inline-font-\(font.fontName)-\(font.pointSize)",
+                            message: "[InlineFont] name=\(font.fontName) size=\(font.pointSize)"
+                        )
+                    }
                 }
                 .background(
                     GeometryReader { proxy in
@@ -94,27 +100,29 @@ struct HTMLInline: View {
     }
 
     var content: some View {
-        texts
-            .reduce(Text("")) { result, type in
-                switch type {
-                case let .text(string, container):
-                    return result + Text(AttributedString(
-                        string,
-                        attributes: container.toAttributeContainer()
-                    ))
-                case let .newLine(container):
-                    return result + Text(AttributedString(
-                        "\n",
-                        attributes: container.toAttributeContainer()
-                    ))
-                    
-                case let .attachment(_, _, _, styleContainer):
-                    let imageText = Text(
-                        attachmentImage(for: type, styleContainer: styleContainer)
-                    )
-                    return result + imageText.font(.system(size: 1))
-                }
+        var result = Text("")
+        for type in texts {
+            let next: Text
+            switch type {
+            case let .text(string, container):
+                next = Text(AttributedString(
+                    string,
+                    attributes: container.toAttributeContainer()
+                ))
+            case let .newLine(container):
+                next = Text(AttributedString(
+                    "\n",
+                    attributes: container.toAttributeContainer()
+                ))
+            case let .attachment(_, _, _, styleContainer):
+                let imageText = Text(
+                    attachmentImage(for: type, styleContainer: styleContainer)
+                )
+                next = imageText.font(.system(size: 1))
             }
+            result = result + next
+        }
+        return result
     }
 
 }

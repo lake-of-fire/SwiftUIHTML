@@ -3,6 +3,7 @@ import argparse
 import html
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -97,6 +98,46 @@ def parse_trim_geometry(value):
         }
     except ValueError:
         return None
+
+
+def parse_test_log(path_value):
+    if not path_value:
+        return {}
+    path = Path(path_value)
+    if not path.exists():
+        return {}
+    try:
+        text = path.read_text()
+    except OSError:
+        return {}
+    statuses = {}
+    matcher = re.compile(r"Test case '([^']+)' (passed|failed)")
+    for match in matcher.finditer(text):
+        raw_test = match.group(1)
+        status_raw = match.group(2)
+        simple = raw_test.replace("/", ".")
+        if "." in simple:
+            simple = simple.split(".")[-1]
+        simple = simple.split("(", 1)[0]
+        statuses[simple] = status_raw
+    case_matcher = re.compile(r"Test Case '-\[[^ ]+ ([^]]+)\]' (passed|failed)")
+    for match in case_matcher.finditer(text):
+        method_name = match.group(1)
+        status_raw = match.group(2)
+        statuses[method_name] = status_raw
+        if method_name.startswith("test") and len(method_name) > 4:
+            trimmed = method_name[4:]
+            if trimmed:
+                trimmed = trimmed[0].lower() + trimmed[1:]
+                statuses[trimmed] = status_raw
+                base_name = trimmed
+            else:
+                base_name = method_name
+        else:
+            base_name = method_name
+        base_key = base_name.split("_", 1)[0]
+        statuses[base_key] = status_raw
+    return statuses
 
 
 def load_ocr_metrics(ocr_dir, base_name, label):
@@ -410,57 +451,79 @@ def format_metrics(metrics):
     )
 
 
-def build_report(artifacts_dir, baseline_dir, title, out_prefix):
+def is_snapshot_image(name: str) -> bool:
+    lower = name.lower()
+    if lower.startswith(("reference_", "failure_", "difference_", "diff-")):
+        return False
+    if lower.startswith("_probe_"):
+        return False
+    if ".baseline." in lower or ".ocr." in lower:
+        return False
+    if lower.endswith(".render.png"):
+        return False
+    return True
+
+
+def build_report(artifacts_dir, baseline_dir, title, out_prefix, test_log=None):
     if not artifacts_dir.exists():
         raise SystemExit("No artifacts found at " + str(artifacts_dir))
     stamp = time.strftime("%Y%m%d-%H%M%S")
     report_dir = Path(f"{out_prefix}-{stamp}")
     report_dir.mkdir(parents=True, exist_ok=True)
     ocr_dir = artifacts_dir.parent / "ocr"
+    test_statuses = parse_test_log(test_log)
+    test_log_path = Path(test_log) if test_log else None
+    test_log_available = bool(test_log_path and test_log_path.exists())
 
     rows = []
-    for artifact in sorted(artifacts_dir.rglob("*.png")):
+    artifacts = list(artifacts_dir.rglob("*.png"))
+    artifacts.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    for artifact in artifacts:
         name = artifact.name
-        if name.startswith(("reference_", "failure_", "difference_", "diff-")):
-            continue
         group = artifact.parent.relative_to(artifacts_dir).as_posix() or "."
-        baseline = baseline_dir / name
+        if not is_snapshot_image(name):
+            continue
+        baseline = baseline_dir / group
+        baseline = baseline / name
         rows.append((group, name, baseline, artifact))
 
     css = """
 body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 24px; background: #f7f7f7; }
 .header { margin-bottom: 16px; }
 .group { margin-top: 28px; }
-.card { background: #fff; border-radius: 12px; padding: 16px; margin: 16px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+.card { background: #fff; border-radius: 12px; padding: 16px; margin: 16px 0; box-shadow: 0 3px 18px rgba(0,0,0,0.08); }
 .title { font-weight: 600; margin-bottom: 12px; }
-.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; }
-.details { margin-top: 10px; }
-.details-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.html-preview { display: none; margin-top: 8px; border: 1px solid #e5e5e5; border-radius: 8px; background: #fff; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; width: 100%; }
+.details { margin-top: 12px; }
+.details-toggle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+.details-content { display: none; margin-top: 12px; }
+.details-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.details-column { background: #fafafa; border: 1px solid #eee; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .label { font-size: 12px; color: #666; margin-bottom: 6px; }
-img { width: 100%; height: auto; border: 1px solid #eee; background: #fff; }
+.toggle { margin-top: 8px; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; }
+.html-block { margin: 0; background: #fff; color: #111; padding: 10px; border-radius: 8px; border: 1px solid #e5e5e5; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+.html-preview { border-radius: 8px; overflow: hidden; border: 1px solid #e5e5e5; }
+.html-preview iframe { width: 100%; height: 220px; border: 0; }
+.html-render img { width: 100%; height: auto; border-radius: 8px; border: 1px solid #e5e5e5; }
+.ocr-block { margin: 8px 0 0; background: #111; color: #eaeaea; padding: 10px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+img { width: 100%; height: auto; border: 1px solid #eee; background: #fff; border-radius: 6px; }
 .path { font-size: 11px; color: #999; word-break: break-all; }
 .missing { color: #b00020; font-size: 12px; }
 .metrics { font-size: 11px; color: #666; margin-top: 6px; }
 .flag { color: #b00020; font-size: 12px; font-weight: 600; margin-top: 6px; }
-.toggle { margin-top: 8px; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; }
-.html-block { display: none; margin-top: 10px; background: #0f0f0f; color: #e8e8e8; padding: 12px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
-.html-preview { display: none; margin-top: 10px; border: 1px solid #e5e5e5; border-radius: 8px; background: #fff; }
-.html-preview iframe { width: 100%; height: 220px; border: 0; border-radius: 8px; }
-.ocr-block { display: none; margin-top: 10px; background: #111; color: #eaeaea; padding: 10px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+.test-result { font-size: 12px; font-weight: 600; margin-top: 6px; }
+.test-result.passed { color: #2e7d32; }
+.test-result.failed { color: #d32f2f; }
+.test-result.unknown { color: #6c6c6c; }
 """
 
     script = """
 <script>
 function toggleHtml(id) {
-  var el = document.getElementById(id);
-  var preview = document.getElementById(id + "-preview");
-  var ocr = document.getElementById(id + "-ocr");
-  if (!el || !preview) return;
-  var show = (el.style.display !== "block");
-  el.style.display = show ? "block" : "none";
-  preview.style.display = show ? "block" : "none";
-  if (ocr) ocr.style.display = show ? "block" : "none";
+  var detail = document.getElementById(id + "-details");
+  if (!detail) return;
+  var show = (detail.style.display !== "block");
+  detail.style.display = show ? "block" : "none";
 }
 </script>
 """
@@ -475,6 +538,9 @@ function toggleHtml(id) {
         if group != current_group:
             current_group = group
             parts.append(f"<div class='group'><h3>{html.escape(group)}</h3></div>")
+        snapshot_id = artifact.stem.split(".", 1)[0]
+        lookup_key = snapshot_id.split("-", 1)[0]
+        test_status = test_statuses.get(lookup_key)
         parts.append("<div class='card'>")
         parts.append(f"<div class='title'>{html.escape(name)}</div>")
         parts.append("<div class='grid'>")
@@ -507,6 +573,12 @@ function toggleHtml(id) {
         parts.append(f"<div class='metrics'>{html.escape(format_metrics(new_metrics))}</div>")
         if flags:
             parts.append(f"<div class='flag'>Possible missing images: {html.escape(', '.join(flags))}</div>")
+        if test_status:
+            status_label = test_status.capitalize()
+            status_class = "failed" if test_status == "failed" else "passed"
+            parts.append(f"<div class='test-result {status_class}'>Test result ({html.escape(snapshot_id)}): {html.escape(status_label)}</div>")
+        elif test_log_available:
+            parts.append(f"<div class='test-result unknown'>Test result ({html.escape(snapshot_id)}): log recorded but test missing</div>")
         parts.append("</div>")
 
         parts.append("<div>")
@@ -542,12 +614,20 @@ function toggleHtml(id) {
             f"<div class='snapshot-root'>{html_payload}</div></body></html>"
         )
         parts.append("<div class='details'>")
-        parts.append("<div class='details-row'>")
-        parts.append(f"<button class='toggle' onclick=\"toggleHtml('{html_id}')\">Toggle HTML input</button>")
-        parts.append(f"<div class='label'>HTML Snapshot</div>")
+        parts.append("<div class='details-toggle-row'>")
+        parts.append(f"<button class='toggle' onclick=\"toggleHtml('{html_id}')\">Toggle HTML input / preview</button>")
+        parts.append("<div class='label'>HTML input + iframe + snapshot</div>")
         parts.append("</div>")
+        parts.append(f"<div class='details-content' id='{html_id}-details'>")
+        parts.append("<div class='details-columns'>")
+        parts.append("<div class='details-column'>")
+        parts.append("<div class='label'>HTML Input</div>")
         parts.append(f"<pre id='{html_id}' class='html-block'>{html.escape(html_payload)}</pre>")
+        parts.append("</div>")
+        parts.append("<div class='details-column'>")
+        parts.append("<div class='label'>HTML iframe</div>")
         parts.append(f"<div id='{html_id}-preview' class='html-preview'><iframe srcdoc=\"{html.escape(iframe_doc)}\"></iframe></div>")
+        parts.append("</div>")
 
         ocr_payloads = []
         if baseline.exists():
@@ -556,9 +636,13 @@ function toggleHtml(id) {
             ocr_payloads.append(("new", run_vision_ocr(artifact)))
         render_path = report_dir / f"render-{group.replace('/', '_')}-{name}"
         if render_html_preview(html_payload, render_path):
-            parts.append(f"<div class='label'>HTML Render</div>")
+            parts.append("<div class='details-column html-render'>")
+            parts.append("<div class='label'>Rendered Snapshot</div>")
             parts.append(f"<img src='file://{render_path}' />")
+            parts.append("</div>")
             ocr_payloads.append(("html", run_vision_ocr(render_path)))
+
+        parts.append("</div>")  # details-columns
 
         ocr_lines = []
         for label, payload in ocr_payloads:
@@ -569,6 +653,7 @@ function toggleHtml(id) {
         if ocr_lines:
             parts.append(f"<pre id='{html_id}-ocr' class='ocr-block'>{html.escape('\\n\\n'.join(ocr_lines))}</pre>")
 
+        parts.append("</div>")  # details-content
         parts.append("</div>")  # details
         parts.append("</div>")  # card
 
@@ -585,11 +670,12 @@ def main():
     parser.add_argument("--baseline", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--out-prefix", required=True)
+    parser.add_argument("--test-log", default="", help="Optional xcodebuild log used to summarize test results")
     args = parser.parse_args()
 
     artifacts_dir = Path(args.artifacts).resolve()
     baseline_dir = Path(args.baseline).resolve()
-    build_report(artifacts_dir, baseline_dir, args.title, args.out_prefix)
+    build_report(artifacts_dir, baseline_dir, args.title, args.out_prefix, args.test_log)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,25 @@ struct HTMLSwiftSoupParser: HTMLParserable {
             let document = try SwiftSoup.parse(html)
             if let body = document.body() {
                 if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1" {
+                    let style = (try? body.attr("style")) ?? ""
+                    print("[SwiftSoupParser] body attr style=\(style)")
+                    if let attrs = body.getAttributes(), attrs.size() > 0 {
+                        print("[SwiftSoupParser] body attr count=\(attrs.size())")
+                        for attr in attrs {
+                            print("[SwiftSoupParser] body attr \(attr.getKey())=\(attr.getValue())")
+                        }
+                    }
+                }
+                if let selectedBody = try? document.select("body").first(),
+                   !selectedBody.equals(body),
+                   (try? selectedBody.attr("style").isEmpty) == false {
+                    if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1" {
+                        let style = (try? selectedBody.attr("style")) ?? ""
+                        print("[SwiftSoupParser] using selected body with style=\(style)")
+                    }
+                    return try buildHTMLNode(from: selectedBody)
+                }
+                if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1" {
                     logBodyChildren(body)
                 }
                 return try buildHTMLNode(from: body)
@@ -21,6 +40,8 @@ struct HTMLSwiftSoupParser: HTMLParserable {
         }
         return HTMLNode(tag: "div", children: [])
     }
+
+    // no-op: style extraction intentionally removed; rely on SwiftSoup attributes.
 
     private func logBodyChildren(_ body: Element) {
         var lines: [String] = []
@@ -135,6 +156,10 @@ extension HTMLSwiftSoupParser {
                 self.attributes = attributes
             } else {
                 self.attributes = Self.emptyAttributes
+            }
+            if ProcessInfo.processInfo.environment["SWIFTUIHTML_PARSER_LOGS"] == "1",
+               tag == "body" {
+                print("[SwiftSoupParser] builder body attrs=\(self.attributes)")
             }
             let count = element.childNodeSize()
             self.capacityHint = count

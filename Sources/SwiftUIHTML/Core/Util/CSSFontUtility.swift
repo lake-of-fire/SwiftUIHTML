@@ -1,5 +1,13 @@
 //  Copyright © 2025 PRND. All rights reserved.
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
+@_implementationOnly import CoreText
+import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// CSS 폰트 스타일 파싱 및 처리를 담당하는 유틸리티 클래스
 
@@ -87,6 +95,9 @@ public enum CSSFontUtility {
         // font-size와 font-family 속성 추출
         let fontSizeValue = cssStyle["font-size"]?.string
         let fontFamilyValue = cssStyle["font-family"]?.string
+        if shouldLogFontResolution(), let fontFamilyValue {
+            AttachmentDebugLogger.record("[Font] css font-family=\(fontFamilyValue) current=\(currentFont?.fontName ?? "nil") size=\(currentSize)")
+        }
 
         // font 속성이 있다면 해당 속성 파싱 (예: "italic bold 16px/2 Arial, sans-serif")
         if let fontShorthand = cssStyle["font"]?.string {
@@ -111,7 +122,11 @@ public enum CSSFontUtility {
 
         // font-family가 있으면 해당 폰트로, 없으면 현재 폰트의 사이즈만 변경
         if let fontFamily = fontFamilyValue {
-            return createFont(fromFontFamily: fontFamily, size: size)
+            let font = createFont(fromFontFamily: fontFamily, size: size)
+            if shouldLogFontResolution() {
+                AttachmentDebugLogger.record("[Font] resolved family=\(fontFamily) -> \(font.fontName) size=\(font.pointSize)")
+            }
+            return font
         } else if size != currentSize {
             return currentFont?.withSize(size) ?? PlatformFont.systemFont(ofSize: size)
         }
@@ -151,7 +166,7 @@ public enum CSSFontUtility {
         // 첫 번째 유효한 폰트 찾기
         var primaryFont: PlatformFont! = nil
         for name in specificFontNames {
-            if let font = PlatformFont(name: name, size: size) {
+            if let font = resolveFont(named: name, size: size) {
                 primaryFont = font
                 break
             }
@@ -174,7 +189,7 @@ public enum CSSFontUtility {
         // Fallback 폰트 추가 (첫 번째 이후의 특정 폰트들)
         if specificFontNames.count > 1 {
             for name in specificFontNames.dropFirst() {
-                if let font = PlatformFont(name: name, size: size) {
+                if let font = resolveFont(named: name, size: size) {
                     cascadeList.append(font.fontDescriptor)
                 }
             }
@@ -207,6 +222,42 @@ public enum CSSFontUtility {
     private static func isGenericFontFamily(_ name: String) -> Bool {
         let genericFamilies = ["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"]
         return genericFamilies.contains(name.lowercased())
+    }
+
+    private static func resolveFont(named name: String, size: CGFloat) -> PlatformFont? {
+        if let font = PlatformFont(name: name, size: size) {
+            return font
+        }
+#if os(iOS)
+        let lower = name.lowercased()
+        if lower == "arial", let font = PlatformFont(name: "ArialMT", size: size) {
+            return font
+        }
+        if lower == "helvetica", let font = PlatformFont(name: "Helvetica", size: size) {
+            return font
+        }
+        if lower == "times new roman", let font = PlatformFont(name: "TimesNewRomanPSMT", size: size) {
+            return font
+        }
+#endif
+#if os(iOS)
+        let descriptor = PlatformFontDescriptor(fontAttributes: [.family: name])
+        let font = PlatformFont(descriptor: descriptor, size: size)
+        if shouldLogFontResolution() {
+            AttachmentDebugLogger.record("[Font] resolve family=\(name) -> \(font.fontName) family=\(font.familyName)")
+        }
+        if font.familyName.caseInsensitiveCompare(name) == .orderedSame {
+            return font
+        }
+#endif
+        return nil
+    }
+
+    static func shouldLogFontResolution() -> Bool {
+        ProcessInfo.processInfo.environment["SWIFTUIHTML_FONT_LOGS"] == "1"
+            || UserDefaults.standard.bool(forKey: "SWIFTUIHTML_FONT_LOGS")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
     }
 
     private static func createSystemFontForGenericFamily(_ family: String, size: CGFloat) -> PlatformFont {
